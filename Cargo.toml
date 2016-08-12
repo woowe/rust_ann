@@ -1,0 +1,6 @@
+[package]
+name = "rust_ann"
+version = "0.1.0"
+authors = ["Jason Cardinal <jcardinal@dealersocket.com>"]
+
+[dependencies]
