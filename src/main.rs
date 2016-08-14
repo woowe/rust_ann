@@ -1,48 +1,7 @@
-
-// struct Neuron<'a> {
-//     weight: f64,
-//     output_neurons: Vec<&'a Neuron<'a>>,
-// }
-//
-// impl<'a> Neuron<'a> {
-//     fn new(init_weight: f64) -> Neuron<'a> {
-//         Neuron {
-//             weight: init_weight,
-//             output_neurons: Vec::new(),
-//         }
-//     }
-//
-//     fn activate(inputs_weights: &[f64]) -> f64 {
-//         let activity = inputs_weights.iter().fold(0f64, |acc, x| acc + x);
-//         1f64 / 1f64 + (-activity as f64).exp()
-//     }
-// }
-
-
 extern crate rand;
 
-#[derive(Debug)]
-struct Matrix2d {
-    n_rows: usize,
-    n_cols: usize,
-    matrix: Vec<Vec<f64>>,
-}
-
-impl Matrix2d {
-    fn fill_rng(n_rows: usize, n_cols: usize) -> Matrix2d {
-        Matrix2d {
-            n_rows: n_rows,
-            n_cols: n_cols,
-            matrix: (0..n_rows)
-                .map(move |_| {
-                    (0..n_cols)
-                        .map(move |_| rand::random::<f64>())
-                        .collect::<Vec<f64>>()
-                })
-                .collect::<Vec<Vec<f64>>>(),
-        }
-    }
-}
+mod matrix_utils;
+use matrix_utils::*;
 
 struct ForwardNeuralNet {
     input_layers: u32,
@@ -54,7 +13,6 @@ struct ForwardNeuralNet {
 
 impl ForwardNeuralNet {
     fn new(input_layers: u32, output_layers: u32, hidden_layers: u32) -> ForwardNeuralNet {
-        let mut rng = rand::thread_rng();
         ForwardNeuralNet {
             input_layers: input_layers,
             output_layers: output_layers,
@@ -101,5 +59,5 @@ fn main() {
     println!("NORMALIZED INPUT: {:?}", &norm_x[..]);
     println!("NORMALIZED OUTPUT: {:?}", &norm_y[..]);
 
-    println!("RAND MARTIX FILL: {:?}", Matrix2d::fill_rng(2, 2));
+    println!("RAND MARTIX FILL: {:?}", Vec::<f64>::fill_rng(2, 2));
 }
