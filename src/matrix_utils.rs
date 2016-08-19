@@ -1,58 +1,67 @@
 use rand::{Rand, random};
 
-pub trait Matrix2d<T> {
-    fn get_cols(&self) -> usize;
-    fn get_rows(&self) -> usize;
-    fn get_axis(&self, axis: usize) -> Vec<T>;
+#[derive(Debug)]
+pub struct Matrix2d {
+    n_rows: usize,
+    n_cols: usize,
+    martix: Vec<Vec<f64>>
 }
 
-pub trait Matrix2dFill<T: Rand> {
-    fn fill(n_cols: usize, n_rows: usize) -> Vec<Vec<T>>;
-    fn fill_rng(n_cols: usize, n_rows: usize) -> Vec<Vec<T>>;
-}
-
-pub trait Matrix2dOps<T: Matrix2d<T>> {
-    fn dot(&self, m: &T) -> T {
-        let mut dot = Vec::new();
-
-        for()
-
-        return dot;
-    }
-}
-
-impl<T: Rand> Matrix2d<T> for Vec<Vec<T>> {
-    fn get_rows(&self) -> usize {
-        self.len()
-    }
-
-    fn get_cols(&self) -> usize {
-        match self.get(0) {
-            Some(v) => v.len(),
-            None => 0usize
+impl Matrix2d {
+    pub fn new(n_rows: usize, n_cols: usize) -> Matrix2d {
+        Matrix2d {
+            n_rows: n_rows,
+            n_cols: n_cols,
+            martix: (0..n_rows).map(|_| {
+                (0..n_cols).map(|_| 0f64).collect::<Vec<f64>>()
+            }).collect::<Vec<Vec<f64>>>()
         }
     }
 
-    fn get_axis(&self, axis: usize) -> Vec<T> {
+    pub fn from_vec(vec: &Vec<Vec<f64>>) -> Matrix2d {
+        Matrix2d {
+            n_rows: vec.len(),
+            n_cols: vec[0].len(),
+            martix: vec.clone()
+        }
+    }
 
+    pub fn fill_rng(n_rows: usize, n_cols: usize, ) -> Matrix2d {
+        Matrix2d {
+            n_rows: n_rows,
+            n_cols: n_cols,
+            martix: (0..n_rows).map(|row| {
+                (0..n_cols).map(|col| random::<f64>()).collect::<Vec<f64>>()
+            }).collect::<Vec<Vec<f64>>>()
+        }
+    }
+
+    pub fn transpose(&self) -> Matrix2d {
+        Matrix2d {
+            n_rows: self.n_cols,
+            n_cols: self.n_rows,
+            martix: (0..self.n_cols).map(|col| {
+                (0..self.n_rows).map(|row| self.martix[row][col]).collect::<Vec<f64>>()
+            }).collect::<Vec<Vec<f64>>>()
+        }
     }
 }
 
-impl<T: Rand> Matrix2dFill<T> for Vec<T> {
-    fn fill(n_cols: usize, n_rows: usize) -> Vec<Vec<T>> {
-        (0..n_rows)
-            .map(move |_| {
-                Vec::with_capacity(n_cols)
-            })
-            .collect::<Vec<Vec<T>>>()
-    }
-    fn fill_rng(n_cols: usize, n_rows: usize) -> Vec<Vec<T>>  {
-        (0..n_rows)
-            .map(move |_| {
-                (0..n_cols)
-                    .map(move |_| random::<T>())
-                    .collect::<Vec<T>>()
-            })
-            .collect::<Vec<Vec<T>>>()
+pub trait ToMatrix2d {
+    fn to_matrix_2d(&self) -> Option<Matrix2d>;
+}
+
+impl ToMatrix2d for Vec<Vec<f64>> {
+    fn to_matrix_2d(&self) -> Option<Matrix2d> {
+        if self.len() > 0 {
+            let col_len = self[0].len();
+            for row in self.iter() {
+                if col_len != row.len() {
+                    return None;
+                }
+            }
+            return Some(Matrix2d::from_vec(self));
+        }
+        None
     }
 }

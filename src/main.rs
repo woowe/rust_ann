@@ -51,13 +51,15 @@ fn main() {
     let x = vec![vec![3f64, 5f64, 10f64], vec![5f64, 1f64, 2f64]];
     let y = vec![75f64, 82f64, 93f64];
 
-    let norm_x = normalize_input_matrix(&x);
+    let norm_x = normalize_input_matrix(&x).to_matrix_2d().unwrap();
     let norm_y = y.iter().map(|out| out / 100f64).collect::<Vec<f64>>();
 
     let nn = ForwardNeuralNet::new(2, 3, 1);
 
-    println!("NORMALIZED INPUT: {:?}", &norm_x[..]);
-    println!("NORMALIZED OUTPUT: {:?}", &norm_y[..]);
+    println!("NORMALIZED INPUT: {:#?}", norm_x);
+    println!("NORMALIZED OUTPUT: {:#?}", norm_y);
 
-    println!("RAND MARTIX FILL: {:?}", Vec::<f64>::fill_rng(2, 2));
+    println!("NORMALIZED INPUT AFTER TRANSPOSE: {:#?}", norm_x.transpose());
+
+    println!("RAND MARTIX FILL: {:#?}", Matrix2d::fill_rng(2, 2));
 }
