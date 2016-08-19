@@ -52,7 +52,7 @@ fn main() {
     let y = vec![75f64, 82f64, 93f64];
 
     let norm_x = normalize_input_matrix(&x).to_matrix_2d().unwrap();
-    let norm_y = y.iter().map(|out| out / 100f64).collect::<Vec<f64>>();
+    let norm_y = y.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
 
     let nn = ForwardNeuralNet::new(2, 3, 1);
 
