@@ -4,29 +4,62 @@ mod matrix_utils;
 use matrix_utils::*;
 
 struct ForwardNeuralNet {
-    input_layers: u32,
-    output_layers: u32,
-    hidden_layers: u32,
-    w1: Vec<f64>,
-    w2: Vec<f64>,
+    weights: Vec<Matrix2d>,
+    activities: Vec<Matrix2d>,
+    activations: Vec<Matrix2d>
 }
 
 impl ForwardNeuralNet {
-    fn new(input_layers: u32, output_layers: u32, hidden_layers: u32) -> ForwardNeuralNet {
-        ForwardNeuralNet {
-            input_layers: input_layers,
-            output_layers: output_layers,
-            hidden_layers: hidden_layers,
-            w1: Vec::new(),
-            w2: Vec::new(),
+    fn new(topology: Vec<usize>) -> Option<ForwardNeuralNet> {
+        if topology.len() > 2 {
+            return Some(ForwardNeuralNet {
+                weights: (0..topology.len() - 1).map(|idx| {
+                    Matrix2d::fill_rng(topology[idx], topology[idx + 1])
+                }).collect::<Vec<Matrix2d>>(),
+                activities: Vec::new(),
+                activations: Vec::new()
+                // w1: Matrix2d::fill_rng(2, 3),
+                // w2: Matrix2d::fill_rng(3, 1),
+            })
         }
+        None
     }
 
-    fn feed_forward(&self, inputs: &[Vec<f64>]) {}
+    fn feed_forward(&mut self, input: &Matrix2d) -> Matrix2d {
+        self.activities.push(input.dot(&self.weights[0]).unwrap());
+        // println!("Z({}): {:?}", 2, input.dot(&self.weights[0]).unwrap());
+        for (idx, weight) in self.weights.iter().enumerate().skip(1) {
+            let activation  = self.activities.last().unwrap().apply_fn(sigmoid);
+            // println!("A({}): {:?}", idx + 1, &activation);
+            self.activations.push(activation);
+            let activity    = self.activations.last().unwrap().dot(weight).unwrap();
+            // println!("Z({}): {:?}", idx + 2, &activity);
+            self.activities.push(activity);
+        }
+
+        return self.activities.last().unwrap().apply_fn(sigmoid);
+    }
+
+    fn cost_function_prime(&mut self, input: &Matrix2d, output: Matrix2d) -> Vec<Matrix2d> {
+        let y_hat = self.feed_forward(&input);
+        let z3 = &self.activities[1];
+        let cost_matrix = (output - y_hat).unwrap().scale(-1f64);
+        let delta3 = z3.apply_fn(sigmoid_prime).mult(&cost_matrix).unwrap();
+        let djdw2 = self.activations.last().unwrap().transpose().dot(&delta3).unwrap();
+
+        let delta2 = delta3.dot(&self.weights.last().unwrap().transpose()).unwrap().mult(&self.activities[0].apply_fn(sigmoid_prime)).unwrap();
+        let djdw1 = input.transpose().dot(&delta2).unwrap();
+
+        return vec![djdw1, djdw2];
+    }
 }
 
 fn sigmoid(z: f64) -> f64 {
-    1f64 / 1f64 + (-z as f64).exp()
+    1f64 / (1f64 + (-z as f64).exp())
+}
+
+fn sigmoid_prime(z: f64) -> f64 {
+    (-z).exp() / ( (1f64 + (-z).exp()).powf(2f64) )
 }
 
 fn normalize_input_matrix(input: &[Vec<f64>]) -> Vec<Vec<f64>> {
@@ -51,15 +84,15 @@ fn main() {
     let x = vec![vec![3f64, 5f64, 10f64], vec![5f64, 1f64, 2f64]];
     let y = vec![75f64, 82f64, 93f64];
 
-    let norm_x = normalize_input_matrix(&x).to_matrix_2d().unwrap();
+    let norm_x = normalize_input_matrix(&x).to_matrix_2d().unwrap().transpose();
     let norm_y = y.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
 
-    let nn = ForwardNeuralNet::new(2, 3, 1);
+    let mut nn = ForwardNeuralNet::new(vec![2, 3, 1]).unwrap();
 
-    println!("NORMALIZED INPUT: {:#?}", norm_x);
-    println!("NORMALIZED OUTPUT: {:#?}", norm_y);
+    println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
+    // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
 
-    println!("NORMALIZED INPUT AFTER TRANSPOSE: {:#?}", norm_x.transpose());
-
-    println!("RAND MARTIX FILL: {:#?}", Matrix2d::fill_rng(2, 2));
+    for (i, d) in nn.cost_function_prime(&norm_x, norm_y).iter().enumerate() {
+        println!("DJDW({}): {:?}", i + 1, d);
+    }
 }
