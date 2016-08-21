@@ -42,6 +42,16 @@ impl ForwardNeuralNet {
         return self.activities.last().unwrap().apply_fn(sigmoid);
     }
 
+    fn cost_function(&mut self, input: &Matrix2d, output: Matrix2d) -> f64 {
+        let y_hat = self.feed_forward(&input);
+        let square = |x| x * x;
+        let mut sum = 0;
+
+        let cost = (output - y_hat).unwrap().apply_fn(square);
+
+        return 0.5f64 * cost.ravel().iter().fold(0f64, |acc, x| acc + x);
+    }
+
     fn cost_function_prime(&mut self, input: &Matrix2d, output: Matrix2d) -> Vec<Matrix2d> {
         let y_hat = self.feed_forward(&input);
         let z3 = &self.activities[1];
@@ -74,7 +84,41 @@ impl ForwardNeuralNet {
         self.weights[1] = params[W1_end..W2_end].reshape(*hidden_layer_size, *output_layer_size).unwrap();
     }
 
-    fn compute_gradients(&self, input: &Matrix2d, output: &Matrix2d) ->
+    fn compute_gradients(&mut self, input: &Matrix2d, output: Matrix2d) -> Vec<f64> {
+        let ds = self.cost_function_prime(&input, output);
+        let mut vec = Vec::new();
+        vec.extend(ds[0].ravel());
+        vec.extend(ds[1].ravel());
+        return vec;
+    }
+}
+
+fn compute_numerical_gradients(N: &mut ForwardNeuralNet, X: &Matrix2d, y: &Matrix2d) -> Vec<f64> {
+    let params_init = N.get_params().to_matrix_2d().unwrap();
+    // println!("PARAMS INIT: {:?}", params_init);
+    let mut num_grad = Matrix2d::new(params_init.get_rows(), 1);
+    // println!("NUM GRAD: {:?}", num_grad);
+    let mut peturb = Matrix2d::new(params_init.get_rows(), 1);
+    // println!("PETURB: {:?}", peturb);
+
+    let e = 1e-4 as f64;
+
+    for p in 0..params_init.get_rows() {
+        peturb.get_matrix_mut()[p][0] = e;
+        N.set_params(params_init.addition(&peturb).unwrap().ravel());
+        let loss2 = N.cost_function(X, (*y).clone());
+        N.set_params(params_init.subtract(&peturb).unwrap().ravel());
+        let loss1 = N.cost_function(X, (*y).clone());
+
+        num_grad.get_matrix_mut()[p][0] = (loss2 - loss1) / (2f64 * e);
+
+        peturb.get_matrix_mut()[p][0] = 0f64;
+        // let loss2 = N.cost
+    }
+
+    // println!("NUM GRAD AFTER: {:?}", num_grad);
+
+    return num_grad.ravel();
 }
 
 fn sigmoid(z: f64) -> f64 {
@@ -112,10 +156,18 @@ fn main() {
 
     let mut nn = ForwardNeuralNet::new(vec![2, 3, 1]).unwrap();
 
-    println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
+    // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
     // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
 
-    for (i, d) in nn.cost_function_prime(&norm_x, norm_y).iter().enumerate() {
-        println!("DJDW({}): {:?}", i + 1, d);
-    }
+    // for (i, d) in nn.cost_function_prime(&norm_x, norm_y).iter().enumerate() {
+    //     println!("DJDW({}): {:?}", i + 1, d);
+    // }
+
+    let cng = compute_numerical_gradients(&mut nn, &norm_x, &norm_y).to_matrix_2d().unwrap();
+    let nn_cg = nn.compute_gradients(&norm_x, norm_y).to_matrix_2d().unwrap();
+
+    println!("NUMGRAD: {:?}", cng.ravel());
+    println!("NN GRAD: {:?}", nn_cg.ravel());
+    println!("DIFF: {:?}", nn_cg.subtract(&cng).unwrap());
+    println!("ADD: {:?}", nn_cg.addition(&cng).unwrap());
 }

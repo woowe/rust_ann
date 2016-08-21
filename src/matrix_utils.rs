@@ -2,7 +2,7 @@ use std::fmt;
 use rand::random;
 use std::ops::{Add, Neg, Sub};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub struct Matrix2d {
     n_rows: usize,
     n_cols: usize,
@@ -163,7 +163,7 @@ impl Matrix2d {
         None
     }
 
-    fn subtract(&self, m: &Matrix2d) -> Option<Matrix2d> {
+    pub fn subtract(&self, m: &Matrix2d) -> Option<Matrix2d> {
         if  self.get_cols() == m.get_cols() &&
             self.get_rows() == m.get_rows() {
             return Some(
@@ -181,7 +181,7 @@ impl Matrix2d {
         None
     }
 
-    fn addition(&self, m: &Matrix2d) -> Option<Matrix2d> {
+    pub fn addition(&self, m: &Matrix2d) -> Option<Matrix2d> {
         if  self.get_cols() == m.get_cols() &&
             self.get_rows() == m.get_rows() {
             return Some(
@@ -290,13 +290,13 @@ impl fmt::Debug for Matrix2d {
     }
 }
 
-impl Add for Matrix2d {
-    type Output = Option<Matrix2d>;
-
-    fn add(self, _rhs: Matrix2d) -> Option<Matrix2d> {
-        self.addition(&_rhs)
-    }
-}
+// impl Add for Matrix2d {
+//     type Output = Option<Matrix2d>;
+//
+//     fn add(self, _rhs: Matrix2d) -> Option<Matrix2d> {
+//         self.addition(_rhs)
+//     }
+// }
 
 impl Neg for Matrix2d {
     type Output = Matrix2d;
