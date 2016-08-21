@@ -199,7 +199,7 @@ impl Matrix2d {
         None
     }
 
-    fn ravel(&self) -> Vec<f64> {
+    pub fn ravel(&self) -> Vec<f64> {
         let mut output_vec = Vec::new();
 
         for row in self.get_matrix().iter() {
@@ -211,8 +211,25 @@ impl Matrix2d {
         return output_vec;
     }
 
-    fn reshape(&self, n_rows: usize, n_cols: usize) -> Option<Matrix2d> {
+    pub fn reshape(&self, n_rows: usize, n_cols: usize) -> Option<Matrix2d> {
         let vec = self.ravel();
+        if vec.len() / n_cols == n_rows {
+            return Some(
+                Matrix2d {
+                    n_rows: n_rows,
+                    n_cols: n_cols,
+                    matrix: (0..n_rows).map(|y| {
+                        (0..n_cols).map(|x| {
+                            vec[(y*n_cols) + x]
+                        }).collect::<Vec<f64>>()
+                    }).collect::<Vec<Vec<f64>>>()
+                }
+            );
+        }
+        None
+    }
+
+    pub fn reshape_from_vec(vec: &Vec<f64>, n_rows: usize, n_cols: usize) -> Option<Matrix2d> {
         if vec.len() / n_cols == n_rows {
             return Some(
                 Matrix2d {
@@ -299,6 +316,7 @@ impl Sub for Matrix2d {
 
 pub trait ToMatrix2d {
     fn to_matrix_2d(&self) -> Option<Matrix2d>;
+    fn reshape(&self, n_rows: usize, n_cols: usize) -> Option<Matrix2d>;
 }
 
 impl ToMatrix2d for Vec<Vec<f64>> {
@@ -314,6 +332,10 @@ impl ToMatrix2d for Vec<Vec<f64>> {
         }
         None
     }
+
+    fn reshape(&self, n_rows: usize, n_cols: usize) -> Option<Matrix2d> {
+        self.to_matrix_2d().unwrap().reshape(n_rows, n_cols)
+    }
 }
 
 impl ToMatrix2d for Vec<f64> {
@@ -324,6 +346,25 @@ impl ToMatrix2d for Vec<f64> {
                 .collect::<Vec<Vec<f64>>>()));
         }
         None
+    }
+
+    fn reshape(&self, n_rows: usize, n_cols: usize) -> Option<Matrix2d> {
+        Matrix2d::reshape_from_vec(&self, n_rows, n_cols)
+    }
+}
+
+impl ToMatrix2d for [f64] {
+    fn to_matrix_2d(&self) -> Option<Matrix2d> {
+        if self.len() > 0 {
+            return Some(Matrix2d::from_vec(&self.iter()
+                .map(|i| vec![*i])
+                .collect::<Vec<Vec<f64>>>()));
+        }
+        None
+    }
+
+    fn reshape(&self, n_rows: usize, n_cols: usize) -> Option<Matrix2d> {
+        Matrix2d::reshape_from_vec(&self.to_vec(), n_rows, n_cols)
     }
 }
 
@@ -558,10 +599,53 @@ mod test {
         let sm = Matrix2d {
             n_rows: 3usize,
             n_cols: 2usize,
-            matrix: vec![vec![0f64, -8f64, 0f64], vec![9f64, -12f64, -18f64]]
+            matrix: vec![vec![0f64, -8f64, 0f64], vec![0f64, -12f64, -18f64]]
         };
 
 
-        assert!(m.addition(&m1).unwrap() == sm);
+        assert!(m.mult(&m1).unwrap() == sm);
+    }
+
+    #[test]
+    fn ravel() {
+        let m = Matrix2d {
+            n_rows: 3usize,
+            n_cols: 2usize,
+            matrix: vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]]
+        };
+
+        let rvec = vec![-1f64, 2f64, 0f64, 0f64, 3f64, 6f64];
+
+        assert!(m.ravel() == rvec);
+    }
+
+    #[test]
+    fn reshape_2d() {
+        let m = vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]].reshape(3, 2).unwrap();
+
+        println!("{:?}", m);
+
+        let rm = Matrix2d {
+            n_rows: 3usize,
+            n_cols: 2usize,
+            matrix: vec![vec![-1f64, 2f64], vec![0f64, 0f64], vec![3f64, 6f64]]
+        };
+
+        assert!(m == rm);
+    }
+
+    #[test]
+    fn reshape_1d() {
+        let m = vec![-1f64, 2f64, 0f64, 0f64, 3f64, 6f64].reshape(3, 2).unwrap();
+
+        println!("{:?}", m);
+
+        let rm = Matrix2d {
+            n_rows: 3usize,
+            n_cols: 2usize,
+            matrix: vec![vec![-1f64, 2f64], vec![0f64, 0f64], vec![3f64, 6f64]]
+        };
+
+        assert!(m == rm);
     }
 }

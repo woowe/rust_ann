@@ -4,6 +4,7 @@ mod matrix_utils;
 use matrix_utils::*;
 
 struct ForwardNeuralNet {
+    topology: Vec<usize>,
     weights: Vec<Matrix2d>,
     activities: Vec<Matrix2d>,
     activations: Vec<Matrix2d>
@@ -13,6 +14,7 @@ impl ForwardNeuralNet {
     fn new(topology: Vec<usize>) -> Option<ForwardNeuralNet> {
         if topology.len() > 2 {
             return Some(ForwardNeuralNet {
+                topology: topology.clone(),
                 weights: (0..topology.len() - 1).map(|idx| {
                     Matrix2d::fill_rng(topology[idx], topology[idx + 1])
                 }).collect::<Vec<Matrix2d>>(),
@@ -52,6 +54,27 @@ impl ForwardNeuralNet {
 
         return vec![djdw1, djdw2];
     }
+
+    fn get_params(&self) -> Vec<f64> {
+        let mut params = self.weights[0].ravel();
+        for w in self.weights.iter().skip(1) {
+            params.extend(w.ravel());
+        }
+        params
+    }
+
+    fn set_params(&mut self, params: Vec<f64>) {
+        let W1_start = 0;
+        let input_layer_size = &self.topology[0];
+        let hidden_layer_size = &self.topology[1];
+        let output_layer_size = &self.topology[2];
+        let W1_end = input_layer_size*hidden_layer_size;
+        self.weights[0] = params[W1_start..W1_end].reshape(*input_layer_size, *hidden_layer_size).unwrap();
+        let W2_end = W1_end + (hidden_layer_size*output_layer_size);
+        self.weights[1] = params[W1_end..W2_end].reshape(*hidden_layer_size, *output_layer_size).unwrap();
+    }
+
+    fn compute_gradients(&self, input: &Matrix2d, output: &Matrix2d) ->
 }
 
 fn sigmoid(z: f64) -> f64 {
