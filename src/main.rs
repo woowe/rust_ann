@@ -55,9 +55,9 @@ impl ForwardNeuralNet {
         return self.activities.last().unwrap().apply_fn(sigmoid);
     }
 
-    fn cost_function(&mut self, input: &Matrix2d, output: Matrix2d) -> f64 {
+    fn cost_function(&mut self, input: &Matrix2d, output: &Matrix2d) -> f64 {
         let y_hat = self.feed_forward(&input);
-        let cost = (output - y_hat).unwrap().apply_fn(|x| x * x);
+        let cost = ((*output).clone() - y_hat).unwrap().apply_fn(|x| x * x);
 
         return 0.5f64 * sum_vec(cost.ravel());
     }
@@ -66,8 +66,11 @@ impl ForwardNeuralNet {
         let y_hat = self.feed_forward(&input);
         let z3 = &self.activities[1];
         let cost_matrix = -((*output).clone() - y_hat).unwrap();
+        println!("COST MATRIX: {:?}", &cost_matrix);
+        println!("z3: {:?}", &z3);
         // -(y - y_hat) * sigmoid_prime(z3)
         let delta3 = cost_matrix.mult(&z3.apply_fn(sigmoid_prime)).unwrap();
+        println!("D3: {:?}", &delta3);
         // A(2).T.dot(D3)
         let a2 = &self.activations[0];
         let djdw2 = a2.transpose().dot(&delta3).unwrap();
@@ -76,6 +79,7 @@ impl ForwardNeuralNet {
         let w2 = self.weights.last().unwrap();
         let z2 = &self.activities[0];
         let delta2 = delta3.dot(&w2.transpose()).unwrap().mult(&z2.apply_fn(sigmoid_prime)).unwrap();
+        println!("D2: {:?}", &delta2);
         // X.T.dot(D2)
         let djdw1 = input.transpose().dot(&delta2).unwrap();
 
@@ -125,9 +129,9 @@ fn compute_numerical_gradients(N: &mut ForwardNeuralNet, X: &Matrix2d, y: &Matri
     for p in 0..params_init.get_rows() {
         peturb.get_matrix_mut()[p][0] = e;
         N.set_params(params_init.addition(&peturb).unwrap().ravel());
-        let loss2 = N.cost_function(X, (*y).clone());
+        let loss2 = N.cost_function(X, y);
         N.set_params(params_init.subtract(&peturb).unwrap().ravel());
-        let loss1 = N.cost_function(X, (*y).clone());
+        let loss1 = N.cost_function(X, y);
 
         num_grad.get_matrix_mut()[p][0] = (loss2 - loss1) / (2f64 * e);
 
@@ -190,12 +194,14 @@ fn main() {
     //     println!("DJDW({}): {:?}", i + 1, d);
     // }
 
+    // println!("{:?}", nn.feed_forward(&norm_x));
+
     let cng = compute_numerical_gradients(&mut nn, &norm_x, &norm_y).to_matrix_2d().unwrap();
     let nn_cg = nn.compute_gradients(&norm_x, &norm_y).to_matrix_2d().unwrap();
 
-    println!("NUMGRAD: {:?}", cng.ravel());
-    println!("NN GRAD: {:?}", nn_cg.ravel());
+    // println!("NUMGRAD: {:?}", cng.ravel());
+    // println!("NN GRAD: {:?}", nn_cg.ravel());
     let grad_norm = frobenius_norm(&nn_cg.subtract(&cng).unwrap()) / frobenius_norm(&nn_cg.addition(&cng).unwrap());
-    println!("FROBENIUS NORM: {:e}",  grad_norm);
-    println!("Did stuff correct?: {:?}",  grad_norm < 1e-8 as f64);
+    // println!("FROBENIUS NORM: {:e}",  grad_norm);
+    // println!("Did stuff correct?: {:?}",  grad_norm < 1e-8 as f64);
 }
