@@ -17,23 +17,13 @@ struct ForwardNeuralNet {
 impl ForwardNeuralNet {
     fn new(topology: Vec<usize>) -> Option<ForwardNeuralNet> {
         if topology.len() > 2 {
-            let ws = vec![
-                vec![vec![ 0.75260908,  0.06237675,  0.04749953],
-                     vec![ 0.00078329,  0.4331744 ,  0.12382278]],
-                vec![vec![ 0.42299088],
-                     vec![ 0.14220764],
-                     vec![ 0.70950682]]
-            ];
             return Some(ForwardNeuralNet {
                 topology: topology.clone(),
                 weights: (0..topology.len() - 1).map(|idx| {
-                    // Matrix2d::fill_rng(topology[idx], topology[idx + 1])
-                    ws[idx].to_matrix_2d().unwrap()
+                    Matrix2d::fill_rng(topology[idx], topology[idx + 1])
                 }).collect::<Vec<Matrix2d>>(),
                 activities: Vec::new(),
                 activations: Vec::new()
-                // w1: Matrix2d::fill_rng(2, 3),
-                // w2: Matrix2d::fill_rng(3, 1),
             })
         }
         None
@@ -45,29 +35,20 @@ impl ForwardNeuralNet {
         } else {
             self.activities[0] = input.dot(&self.weights[0]).unwrap();
         }
-        // println!("{:?}", &self.weights[0]);
         for (idx, weight) in self.weights.iter().enumerate().skip(1) {
             let activation  = self.activities[idx - 1].apply_fn(sigmoid);
-            // println!("{}", idx);
             if None == self.activations.get(idx - 1) {
-                // println!("push activation");
                 self.activations.push(activation);
             } else {
                 self.activations[idx - 1] = activation;
             }
             let activity    = self.activations[idx - 1].dot(weight).unwrap();
-            // println!("Z({}): {:?}", idx + 2, &activity);
             if None == self.activities.get(idx) {
-                // println!("push activity");
                 self.activities.push(activity);
             }else {
                 self.activities[idx] = activity
             }
-            // println!("{:?}", weight);
         }
-
-        // println!("ACTIVITES: {:?}", &self.activities);
-
         return self.activities.last().unwrap().apply_fn(sigmoid);
     }
 
@@ -79,29 +60,46 @@ impl ForwardNeuralNet {
     }
 
     fn cost_function_prime(&mut self, input: &Matrix2d, output: &Matrix2d) -> Vec<Matrix2d> {
+        let mut deltas = Vec::new();
+        let mut djdw = Vec::new();
+
         let y_hat = self.feed_forward(&input);
-        let z3 = &self.activities[1];
-        // println!("Y HAT: {:?}", &y_hat);
+        let z_last = &self.activities.last().unwrap();
         let cost_matrix = -((*output).clone() - y_hat).unwrap();
-        // println!("COST MATRIX: {:?}", &cost_matrix);
-        // println!("z3: {:?}", &self.activities);
-        // -(y - y_hat) * sigmoid_prime(z3)
-        let delta3 = cost_matrix.mult(&z3.apply_fn(sigmoid_prime)).unwrap();
-        // println!("D3: {:?}", &delta3);
+        deltas.push(cost_matrix.mult(&z_last.apply_fn(sigmoid_prime)).unwrap());
         // A(2).T.dot(D3)
-        let a2 = &self.activations[0];
-        let djdw2 = a2.transpose().dot(&delta3).unwrap();
-
+        // let a2 = &self.activations[0];
+        // djdw.push(a2.transpose().dot(&deltas[0]).unwrap());
         // D3.dot(W(2).T) * sigmoid_prime(z2)
-        let w2 = self.weights.last().unwrap();
-        let z2 = &self.activities[0];
-        let delta2 = delta3.dot(&w2.transpose()).unwrap().mult(&z2.apply_fn(sigmoid_prime)).unwrap();
-        // println!("D2: {:?}", &delta2);
-        // X.T.dot(D2)
-        let djdw1 = input.transpose().dot(&delta2).unwrap();
+        // let w2 = &self.weights[1];
+        // let z2 = &self.activities[0];
+        // let delta = deltas[0].dot(&w2.transpose()).unwrap().mult(&z2.apply_fn(sigmoid_prime)).unwrap();
+        // deltas.push(delta);
 
-        return vec![djdw1, djdw2];
+        for n in (0..(self.topology.len() - 2)) {
+            let idx = (self.topology.len() - 2) - n;
+            // println!("IDX: {}", idx);
+            let a_t = &self.activations[idx - 1].transpose();
+            let prev_delta = deltas.last().unwrap().clone();
+            // println!("djdw equal?: {}", a_t.dot(&prev_delta).unwrap() == djdw[0]);
+            djdw.push(a_t.dot(&prev_delta).unwrap());
+            //
+            let w_t = &self.weights[idx].transpose();
+            // println!("WEIGHT IS EQUAL?: {}", *w_t == self.weights[1].transpose());
+            let z_prime = &self.activities[idx - 1].apply_fn(sigmoid_prime);
+            let delta = prev_delta.dot(w_t).unwrap().mult(z_prime).unwrap();
+            deltas.push(delta);
+        }
+
+        // X.T.dot(D2)
+        djdw.push(input.transpose().dot(&deltas.last().unwrap()).unwrap());
+        djdw.reverse();
+        return djdw;
     }
+
+    // fn get_dimensions(&self) -> f64 {
+    //     // self.topology.iter().fold(0f64, |acc, x| )
+    // }
 
     fn get_params(&self) -> Vec<f64> {
         let mut params = self.weights[0].ravel();
@@ -112,14 +110,23 @@ impl ForwardNeuralNet {
     }
 
     fn set_params(&mut self, params: Vec<f64>) {
-        let W1_start = 0;
-        let input_layer_size = &self.topology[0];
-        let hidden_layer_size = &self.topology[1];
-        let output_layer_size = &self.topology[2];
-        let W1_end = input_layer_size*hidden_layer_size;
-        self.weights[0] = params[W1_start..W1_end].reshape(*input_layer_size, *hidden_layer_size).unwrap();
-        let W2_end = W1_end + (hidden_layer_size*output_layer_size);
-        self.weights[1] = params[W1_end..W2_end].reshape(*hidden_layer_size, *output_layer_size).unwrap();
+        // let W1_start = 0;
+        // let input_layer_size = &self.topology[0];
+        // let first_hidden_layer_size = &self.topology[1];
+        // let last_hidden_layer_size = &self.topology[self.topology.len() - 2];
+        // let output_layer_size = &self.topology[2];
+        let mut W_end = 0;
+        self.weights = Vec::new();
+        // self.weights.push(params[W1_start..W_end].reshape(*input_layer_size, *first_hidden_layer_size).unwrap());
+        for n in (0..self.topology.len() - 1) {
+            let layer_size = &self.topology[n];
+            let next_layer_size = &self.topology[n+1];
+            let W_start = W_end;
+            W_end = W_start + (layer_size * next_layer_size);
+            self.weights.push(params[W_start..W_end].reshape(*layer_size, *next_layer_size).unwrap());
+        }
+        // let W2_end = W_end + (last_hidden_layer_size*output_layer_size);
+        // self.weights.push(params[W_end..W2_end].reshape(*last_hidden_layer_size, *output_layer_size).unwrap());
     }
 
     fn compute_gradients(&mut self, input: &Matrix2d, output: &Matrix2d) -> Vec<f64> {
@@ -135,11 +142,8 @@ impl ForwardNeuralNet {
 
 fn compute_numerical_gradients(N: &mut ForwardNeuralNet, X: &Matrix2d, y: &Matrix2d) -> Vec<f64> {
     let params_init = N.get_params().to_matrix_2d().unwrap();
-    // println!("PARAMS INIT: {:?}", params_init);
     let mut num_grad = Matrix2d::new(params_init.get_rows(), 1);
-    // println!("NUM GRAD: {:?}", num_grad);
     let mut peturb = Matrix2d::new(params_init.get_rows(), 1);
-    // println!("PETURB: {:?}", peturb);
 
     let e = 1e-4 as f64;
 
@@ -153,10 +157,7 @@ fn compute_numerical_gradients(N: &mut ForwardNeuralNet, X: &Matrix2d, y: &Matri
         num_grad.get_matrix_mut()[p][0] = (loss2 - loss1) / (2f64 * e);
 
         peturb.get_matrix_mut()[p][0] = 0f64;
-        // let loss2 = N.cost
     }
-
-    // println!("NUM GRAD AFTER: {:?}", num_grad);
     N.set_params(params_init.ravel());
 
     return num_grad.ravel();
@@ -202,7 +203,7 @@ fn main() {
     let norm_y = y.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
     // println!("OUTPUT NORM: {:?}", norm_y);
 
-    let mut nn = ForwardNeuralNet::new(vec![2, 3, 1]).unwrap();
+    let mut nn = ForwardNeuralNet::new(vec![2, 30, 8, 8, 8, 8, 8, 1]).unwrap();
 
     // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
     // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
@@ -220,5 +221,5 @@ fn main() {
     // println!("NN GRAD: {:?}", nn_cg.ravel());
     let grad_norm = frobenius_norm(&nn_cg.subtract(&cng).unwrap()) / frobenius_norm(&nn_cg.addition(&cng).unwrap());
     println!("FROBENIUS NORM: {:e}",  grad_norm);
-    println!("Did stuff correct?: {:?}",  grad_norm < 1e-8 as f64);
+    println!("norm < {:e}: {:?}", 10f64.powf(-8f64),  grad_norm < 10f64.powf(-8f64) as f64);
 }
