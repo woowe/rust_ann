@@ -104,10 +104,10 @@ impl Matrix2d {
                 n_cols: m.get_cols(),
                 matrix: (0..self.get_rows())
                     .map(move |row| {
-                        let _row = self.get_row(row).unwrap();
+                        let _row = self.get_row(row).expect(&format!("The row ({}) provided exceded the number of rows in the matrix ({})", &row, self.matrix.len() - 1));
                         (0..m.get_cols())
                             .map(|col| {
-                                let _col = m.get_col(col).unwrap();
+                                let _col = m.get_col(col).expect(&format!("The column ({}) provided exceded the number of columns in the matrix ({})", &col, self.matrix[0].len() - 1));
 
                                 _row.iter()
                                     .enumerate()
@@ -334,7 +334,7 @@ impl ToMatrix2d for Vec<Vec<f64>> {
     }
 
     fn reshape(&self, n_rows: usize, n_cols: usize) -> Option<Matrix2d> {
-        self.to_matrix_2d().unwrap().reshape(n_rows, n_cols)
+        self.to_matrix_2d().expect("Provided vec is of len <= 0").reshape(n_rows, n_cols)
     }
 }
 

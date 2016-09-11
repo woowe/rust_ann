@@ -11,11 +11,12 @@ struct ForwardNeuralNet {
     topology: Vec<usize>,
     weights: Vec<Matrix2d>,
     activities: Vec<Matrix2d>,
-    activations: Vec<Matrix2d>
+    activations: Vec<Matrix2d>,
+    lambda: f64
 }
 
 impl ForwardNeuralNet {
-    fn new(topology: Vec<usize>) -> Option<ForwardNeuralNet> {
+    fn new(topology: Vec<usize>, lambda: f64) -> Option<ForwardNeuralNet> {
         if topology.len() > 2 {
             return Some(ForwardNeuralNet {
                 topology: topology.clone(),
@@ -23,7 +24,8 @@ impl ForwardNeuralNet {
                     Matrix2d::fill_rng(topology[idx], topology[idx + 1])
                 }).collect::<Vec<Matrix2d>>(),
                 activities: Vec::new(),
-                activations: Vec::new()
+                activations: Vec::new(),
+                lambda: lambda
             })
         }
         None
@@ -31,9 +33,9 @@ impl ForwardNeuralNet {
 
     fn feed_forward(&mut self, input: &Matrix2d) -> Matrix2d {
         if None == self.activities.get(0) {
-            self.activities.push(input.dot(&self.weights[0]).unwrap());
+            self.activities.push(input.dot(&self.weights[0]).expect("Dot product went wrong X*W(0)"));
         } else {
-            self.activities[0] = input.dot(&self.weights[0]).unwrap();
+            self.activities[0] = input.dot(&self.weights[0]).expect("Dot product went wrong X*W(0)");
         }
         for (idx, weight) in self.weights.iter().enumerate().skip(1) {
             let activation  = self.activities[idx - 1].apply_fn(sigmoid);
@@ -42,7 +44,7 @@ impl ForwardNeuralNet {
             } else {
                 self.activations[idx - 1] = activation;
             }
-            let activity    = self.activations[idx - 1].dot(weight).unwrap();
+            let activity    = self.activations[idx - 1].dot(weight).expect(&format!("Dot product went wrong: a({})*W({})", idx - 1, idx));
             if None == self.activities.get(idx) {
                 self.activities.push(activity);
             }else {
@@ -55,8 +57,8 @@ impl ForwardNeuralNet {
     fn cost_function(&mut self, output: &Matrix2d, pred: &Matrix2d) -> f64 {
         let y_hat = pred;
         let cost = ((*output).clone() - (*y_hat).clone()).unwrap().apply_fn(|x| x * x);
-
-        return 0.5f64 * sum_vec(cost.ravel());
+        let w_sum = self.weights.iter().fold(0f64, |acc, w| acc + sum_vec(w.apply_fn(|x| x*x).ravel()) );
+        return 0.5f64 * sum_vec(cost.ravel()) / (pred.get_rows() as f64) + ( (self.lambda/2.0)* w_sum );
     }
 
     fn cost_function_prime(&mut self, input: &Matrix2d, output: &Matrix2d, pred: &Matrix2d) -> Vec<Matrix2d> {
@@ -65,8 +67,8 @@ impl ForwardNeuralNet {
 
         let y_hat = pred;
         let z_last = &self.activities.last().unwrap();
-        let cost_matrix = -((*output).clone() - (*y_hat).clone()).unwrap();
-        deltas.push(cost_matrix.mult(&z_last.apply_fn(sigmoid_prime)).unwrap());
+        let cost_matrix = -((*output).clone() - (*y_hat).clone()).expect("Subtract gone wrong (Y - yhat)");
+        deltas.push(cost_matrix.mult(&z_last.apply_fn(sigmoid_prime)).expect("Mult gone wrong cost_matrix x sigmoid(z_last)"));
         // A(2).T.dot(D3)
         // let a2 = &self.activations[0];
         // djdw.push(a2.transpose().dot(&deltas[0]).unwrap());
@@ -76,23 +78,28 @@ impl ForwardNeuralNet {
         // let delta = deltas[0].dot(&w2.transpose()).unwrap().mult(&z2.apply_fn(sigmoid_prime)).unwrap();
         // deltas.push(delta);
 
+        let r_yhat: f64 = 1.0 / (y_hat.get_rows() as f64);
+
         for n in (0..(self.topology.len() - 2)) {
             let idx = (self.topology.len() - 2) - n;
             // println!("IDX: {}", idx);
             let a_t = &self.activations[idx - 1].transpose();
             let prev_delta = deltas.last().unwrap().clone();
-            // println!("djdw equal?: {}", a_t.dot(&prev_delta).unwrap() == djdw[0]);
-            djdw.push(a_t.dot(&prev_delta).unwrap());
+            // println!("a({}).T.dot(d({})) + lambda * W({})", idx + 1, idx + 2, idx + 1);
+            let l_w = self.weights[idx].scale(self.lambda);
+            djdw.push(a_t.dot(&prev_delta).expect("Dot product gone wrong a_t * prev_delta").scale(r_yhat)
+                        .addition(&l_w).expect("Addition gone wrong a_t * prev_delta + lambda * W"));
             //
             let w_t = &self.weights[idx].transpose();
             // println!("WEIGHT IS EQUAL?: {}", *w_t == self.weights[1].transpose());
             let z_prime = &self.activities[idx - 1].apply_fn(sigmoid_prime);
-            let delta = prev_delta.dot(w_t).unwrap().mult(z_prime).unwrap();
+            let delta = prev_delta.dot(w_t).expect("Dot product gone wrong prev_delta * w_t").mult(z_prime).expect("Mult gone wrong (prev_delta * w_t) x z_prime");
             deltas.push(delta);
         }
 
         // X.T.dot(D2)
-        djdw.push(input.transpose().dot(&deltas.last().unwrap()).unwrap());
+        djdw.push(input.transpose().dot(&deltas.last().unwrap()).expect("Dot gone wrong X_t * delta_last").scale(r_yhat)
+                    .addition(&self.weights[0].scale(self.lambda)).expect("Addition gone wrong X_t * delta_last + lambda * W(0)"));
         djdw.reverse();
         return djdw;
     }
@@ -159,6 +166,9 @@ impl ForwardNeuralNet {
         println!("AFTER TRAINING: {:?}", &pred);
         println!("ACTUAL: {:?}", &output);
         println!("ERROR: {:?}", self.cost_function(output, &pred));
+        // for (i, d) in self.cost_function_prime(input, output, &pred).iter().enumerate() {
+        //     println!("DJDW({}): {:?}", i + 1, d);
+        // }
     }
 }
 
@@ -220,19 +230,30 @@ fn normalize_input_matrix(input: &[Vec<f64>]) -> Vec<Vec<f64>> {
 }
 
 fn main() {
-    let x = vec![vec![3f64, 5f64, 10f64], vec![5f64, 1f64, 2f64]];
-    let y = vec![75f64, 82f64, 93f64];
+    // X = np.array([ [0,0,1],[0,1,1],[1,0,1],[1,1,1] ])
+    // y = np.array([[0,1,1,0]]).T
+
+    let x = vec![vec![3f64, 5f64, 10f64, 6.0], vec![5f64, 1f64, 2f64, 1.5]];
+    let y = vec![75f64, 82f64, 93f64, 70.0];
+
+    let testX = vec![vec![4.0, 4.5, 9.0, 6.0], vec![5.5, 1.0, 2.5, 2.0]];
+    let testY = vec![70.0, 89.0, 85.0, 75.0];
+    // let norm_x = vec![ vec![0.0, 0.0, 1.0], vec![0.0, 1.0, 1.0], vec![1.0, 0.0, 1.0], vec![1.0, 1.0, 1.0]].to_matrix_2d().unwrap();
+    // let norm_y = vec![0.0, 1.0, 1.0, 0.0].to_matrix_2d().unwrap();
 
     let norm_x = normalize_input_matrix(&x).to_matrix_2d().unwrap().transpose();
     let norm_y = y.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
+
+    let norm_test_x = normalize_input_matrix(&testX).to_matrix_2d().unwrap().transpose();
+    let norm__test_y = testY.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
     // println!("OUTPUT NORM: {:?}", norm_y);
 
-    let mut nn = ForwardNeuralNet::new(vec![2, 3, 1]).unwrap();
+    let mut nn = ForwardNeuralNet::new(vec![2, 3, 1], 0.0001).unwrap();
 
     // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
     // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
-
-    // for (i, d) in nn.cost_function_prime(&norm_x, &norm_y).iter().enumerate() {
+    // let pred = nn.feed_forward(&norm_x);
+    // for (i, d) in nn.cost_function_prime(&norm_x, &norm_y, &pred).iter().enumerate() {
     //     println!("DJDW({}): {:?}", i + 1, d);
     // }
 
