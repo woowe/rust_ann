@@ -52,20 +52,20 @@ impl ForwardNeuralNet {
         return self.activities.last().unwrap().apply_fn(sigmoid);
     }
 
-    fn cost_function(&mut self, input: &Matrix2d, output: &Matrix2d) -> f64 {
-        let y_hat = self.feed_forward(&input);
-        let cost = ((*output).clone() - y_hat).unwrap().apply_fn(|x| x * x);
+    fn cost_function(&mut self, output: &Matrix2d, pred: &Matrix2d) -> f64 {
+        let y_hat = pred;
+        let cost = ((*output).clone() - (*y_hat).clone()).unwrap().apply_fn(|x| x * x);
 
         return 0.5f64 * sum_vec(cost.ravel());
     }
 
-    fn cost_function_prime(&mut self, input: &Matrix2d, output: &Matrix2d) -> Vec<Matrix2d> {
+    fn cost_function_prime(&mut self, input: &Matrix2d, output: &Matrix2d, pred: &Matrix2d) -> Vec<Matrix2d> {
         let mut deltas = Vec::new();
         let mut djdw = Vec::new();
 
-        let y_hat = self.feed_forward(&input);
+        let y_hat = pred;
         let z_last = &self.activities.last().unwrap();
-        let cost_matrix = -((*output).clone() - y_hat).unwrap();
+        let cost_matrix = -((*output).clone() - (*y_hat).clone()).unwrap();
         deltas.push(cost_matrix.mult(&z_last.apply_fn(sigmoid_prime)).unwrap());
         // A(2).T.dot(D3)
         // let a2 = &self.activations[0];
@@ -130,13 +130,35 @@ impl ForwardNeuralNet {
     }
 
     fn compute_gradients(&mut self, input: &Matrix2d, output: &Matrix2d) -> Vec<f64> {
-        let ds = self.cost_function_prime(&input, &output);
+        let pred = self.feed_forward(input);
+        let ds = self.cost_function_prime(&input, &output, &pred);
         let mut vec = Vec::new();
         for d in ds.iter() {
             // println!("DJDW: {:?}", &d);
             vec.extend(d.ravel());
         }
         return vec;
+    }
+
+    fn train(&mut self, input: &Matrix2d, output: &Matrix2d, alpha: f64, max_iters: usize) -> () {
+        let pred = self.feed_forward(input);
+        let mut error = self.cost_function(output, &pred);
+        for _ in 0..max_iters {
+            let pred = self.feed_forward(input);
+            error = self.cost_function(output, &pred);
+            let djdws = self.cost_function_prime(input, output, &pred);
+            let mut djdws_iter = djdws.iter();
+            for weight in self.weights.iter_mut() {
+                let djdw = (*djdws_iter.next().unwrap()).scale(alpha);
+                let tmp_weight = ((*weight).clone() - djdw).unwrap();
+                *weight = tmp_weight;
+            }
+        }
+
+        let pred = self.feed_forward(input);
+        println!("AFTER TRAINING: {:?}", &pred);
+        println!("ACTUAL: {:?}", &output);
+        println!("ERROR: {:?}", self.cost_function(output, &pred));
     }
 }
 
@@ -150,9 +172,11 @@ fn compute_numerical_gradients(N: &mut ForwardNeuralNet, X: &Matrix2d, y: &Matri
     for p in 0..params_init.get_rows() {
         peturb.get_matrix_mut()[p][0] = e;
         N.set_params(params_init.addition(&peturb).unwrap().ravel());
-        let loss2 = N.cost_function(X, y);
+        let pred1 = N.feed_forward(X);
+        let loss2 = N.cost_function(y, &pred1);
         N.set_params(params_init.subtract(&peturb).unwrap().ravel());
-        let loss1 = N.cost_function(X, y);
+        let pred2 = N.feed_forward(X);
+        let loss1 = N.cost_function(y, &pred2);
 
         num_grad.get_matrix_mut()[p][0] = (loss2 - loss1) / (2f64 * e);
 
@@ -203,7 +227,7 @@ fn main() {
     let norm_y = y.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
     // println!("OUTPUT NORM: {:?}", norm_y);
 
-    let mut nn = ForwardNeuralNet::new(vec![2, 30, 8, 8, 8, 8, 8, 1]).unwrap();
+    let mut nn = ForwardNeuralNet::new(vec![2, 3, 1]).unwrap();
 
     // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
     // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
@@ -222,4 +246,5 @@ fn main() {
     let grad_norm = frobenius_norm(&nn_cg.subtract(&cng).unwrap()) / frobenius_norm(&nn_cg.addition(&cng).unwrap());
     println!("FROBENIUS NORM: {:e}",  grad_norm);
     println!("norm < {:e}: {:?}", 10f64.powf(-8f64),  grad_norm < 10f64.powf(-8f64) as f64);
+    nn.train(&norm_x, &norm_y, 0.5, 60_000);
 }
