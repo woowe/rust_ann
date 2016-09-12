@@ -225,6 +225,32 @@ impl Matrix2d {
         }
         None
     }
+
+    pub fn normalize(&self) -> Matrix2d {
+        let mut maxes = Vec::new();
+        let mut matrix_clone = self.get_matrix().clone();
+        for idx in 0..self.n_cols {
+            maxes.push(self.get_col(idx).unwrap().iter()
+                .fold(0f64, |acc, &x| {
+                        if acc < x.abs() {
+                            return x.abs();
+                        }
+                        return acc;
+                    }));
+        }
+
+        for row in 0..self.n_rows {
+            for col in 0..self.n_cols {
+                matrix_clone[row * self.n_cols + col] /= maxes[col];
+            }
+        }
+
+        Matrix2d {
+            n_rows: self.n_rows,
+            n_cols: self.n_cols,
+            matrix: matrix_clone.clone()
+        }
+    }
 }
 
 impl fmt::Debug for Matrix2d {

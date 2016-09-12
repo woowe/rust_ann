@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::Read;
+
 extern crate rand;
 
 mod matrix_utils;
@@ -5,6 +8,50 @@ use matrix_utils::*;
 
 fn sum_vec(vec: Vec<f64>) -> f64 {
     vec.iter().fold(0f64, |acc, x| acc + x)
+}
+
+struct NetData {
+    train_data: (Matrix2d, Matrix2d),
+    test_data: (Matrix2d, Matrix2d)
+}
+
+impl NetData {
+    pub fn read_csv_file<F, P>(path: &str, f: F, pred: P) -> std::io::Result<NetData>
+        where F: Fn(&str) -> (Vec<f64>, Vec<f64>), P: Fn(usize) -> bool
+    {
+        let mut file = try!(File::open(path));
+        let mut train_data: Vec<(Vec<f64>, Vec<f64>)> = Vec::new();
+        let mut test_data: Vec<(Vec<f64>, Vec<f64>)> = Vec::new();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents);
+        for (i, line) in contents.lines().enumerate() {
+            let data = f(line);
+            if pred(i) {
+                test_data.push(data);
+            } else {
+                train_data.push(data);
+            }
+        }
+
+        let train_data_in = train_data.iter().map(|&(ref in_data, _)| in_data.clone()).collect::<Vec<Vec<f64>>>().to_matrix_2d().unwrap();
+        let train_data_out = train_data.iter().map(|&(_, ref out_data)| out_data.clone()).collect::<Vec<Vec<f64>>>().to_matrix_2d().unwrap();
+
+        let test_data_in = test_data.iter().map(|&(ref in_data, _)| in_data.clone()).collect::<Vec<Vec<f64>>>().to_matrix_2d().unwrap();
+        let test_data_out = test_data.iter().map(|&(_, ref out_data)| out_data.clone()).collect::<Vec<Vec<f64>>>().to_matrix_2d().unwrap();
+
+        Ok(NetData {
+            train_data: (train_data_in, train_data_out),
+            test_data: (test_data_in, test_data_out)
+        })
+    }
+
+    pub fn normalized_train_data(&self) -> (Matrix2d, Matrix2d) {
+        (self.train_data.0.normalize(), self.train_data.1.normalize())
+    }
+
+    pub fn normalized_test_data(&self) -> (Matrix2d, Matrix2d) {
+        (self.test_data.0.normalize(), self.test_data.1.normalize())
+    }
 }
 
 struct ForwardNeuralNet {
@@ -151,36 +198,48 @@ impl ForwardNeuralNet {
         return vec;
     }
 
-    fn train(&mut self, input: &Matrix2d, output: &Matrix2d, eta: f64, alpha: f64, max_iters: usize) -> () {
-        let pred = self.feed_forward(input);
+    // fn pick_rng(range: rand::distributions::Range, pick_hist: &Vec<usize>) -> usize {
+    //     use rand::distributions::{IndependentSample, Range};
+    //     let mut rng = rand::thread_rng();
+    //     let mut pick = range.ind_sample(&mut rng);
+    //     if None != pick_hist.iter().find(|x| x == pick) {
+    //         while None == pick_hist.iter().find(|x| x == pick) {
+    //             pick = range.ind_sample(&mut rng);
+    //         }
+    //     }
+    //
+    //     return pick;
+    // }
+
+    // fn cost(x_i: &Matrix2d, y_i: &Matrix2d) -> f64 {
+    //     let h = self.feed_forward(x_i).get_matrix()[0];
+    //     let y_actual = y_i.get_matrix()[0];
+    //     return 1/2 * (h - y_i).unwrap() * (h - y_i).unwrap();
+    // }
+    //
+    // fn cost_prime()
+
+    fn train(&mut self, input: &Matrix2d, output: &Matrix2d, decay: f64, alpha: f64, max_iters: usize) -> () {
+        let mut pred = self.feed_forward(input);
         let mut error = self.cost_function(output, &pred);
-        while error > 2e-3 {
-        // for _ in 0..max_iters {
-            let pred = self.feed_forward(input);
+        let mut djdws = self.cost_function_prime(input, output, &pred);
+        let mut sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
+        // let mut learning_rate = alpha;
+
+        // let mut pick_hist = Vec::new();
+        //
+        // let rand_input
+        // let mut i = 0;
+        // while sum_grad  > 2e-5 {
+        for i in 0..max_iters {
+            pred = self.feed_forward(input);
             error = self.cost_function(output, &pred);
-            let djdws = self.cost_function_prime(input, output, &pred);
-            // for w_idx in 0..self.weights.len() {
-                // let w_idx = self.weights.len() - idx;
-                // let weights = self.weights[w_idx].clone();
-                // // eta * A * DJDW + alpha * DW;
-                // let oldDeltaweights = self.deltaWeights[w_idx].scale(alpha);
-                //
-                // for a in self.activations.get_matrix().iter() {
-                //     let a_t = a.to_matrix_2d().unwrap();
-                //     let tmp = a_t.scale(eta).mult(&djdws[w_idx + 1]).unwrap();
-                // }
-                // // println!("CURRENT LAYER: {}", w_idx);
-                // // println!("PREV LAYER: {}", w_idx);
-                // println!("W({}): {:?}", w_idx, &weights);
-                // println!("DJDW({}): {:?}", w_idx + 1, &djdws[w_idx + 1]);
-                // println!("A({}): {:?}", w_idx, &self.activations[w_idx]);
-                // let tmp = &self.activations[w_idx].scale(eta).dot(&djdws[w_idx + 1]).expect("Dot gone wrong eta * A * DJDW");
-                // println!("DJDW({}) * A({}): {:?}",w_idx + 1, w_idx, &tmp);
-                // println!("DW({}): {:?}", w_idx, &self.deltaWeights[w_idx + 1]);
-                // let deltaWeights = tmp.addition(&oldDeltaweights).expect("Addition gone wrong eta * A * DJDW + alpha * DW");
-                // self.weights[w_idx] = weights.addition(&deltaWeights).unwrap();
-                // self.deltaWeights[w_idx] = deltaWeights;
-            // }
+            djdws = self.cost_function_prime(input, output, &pred);
+            sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
+
+            if i % 1000 == 0 {
+                println!("ITER: {}, SUM GRAD: {:?}", &i, &sum_grad);
+            }
 
             let mut djdws_iter = djdws.iter();
             for weight in self.weights.iter_mut() {
@@ -188,12 +247,13 @@ impl ForwardNeuralNet {
                 let tmp_weight = ((*weight).clone() - djdw).unwrap();
                 *weight = tmp_weight;
             }
+            // i += 1;
         }
 
-        let pred = self.feed_forward(input);
-        println!("AFTER TRAINING: {:?}", &pred);
-        println!("ACTUAL: {:?}", &output);
-        println!("ERROR: {:?}", self.cost_function(output, &pred));
+        // let pred = self.feed_forward(input);
+        // println!("AFTER TRAINING: {:?}", &pred);
+        // println!("ACTUAL: {:?}", &output);
+        // println!("ERROR: {:?}", self.cost_function(output, &pred));
         // for (i, d) in self.cost_function_prime(input, output, &pred).iter().enumerate() {
         //     println!("DJDW({}): {:?}", i + 1, d);
         // }
@@ -267,22 +327,45 @@ fn main() {
     // X = np.array([ [0,0,1],[0,1,1],[1,0,1],[1,1,1] ])
     // y = np.array([[0,1,1,0]]).T
 
-    let x = vec![vec![3f64, 5f64, 10f64, 6.0], vec![5f64, 1f64, 2f64, 1.5]];
-    let y = vec![75f64, 82f64, 93f64, 70.0];
-
-    let testX = vec![vec![4.0, 4.5, 9.0, 6.0], vec![5.5, 1.0, 2.5, 2.0]];
-    let testY = vec![70.0, 89.0, 85.0, 75.0];
+    // let x = vec![vec![3f64, 5f64, 10f64, 6.0], vec![5f64, 1f64, 2f64, 1.5]];
+    // let y = vec![75f64, 82f64, 93f64, 70.0];
+    //
+    // let testX = vec![vec![4.0, 4.5, 9.0, 6.0], vec![5.5, 1.0, 2.5, 2.0]];
+    // let testY = vec![70.0, 89.0, 85.0, 75.0];
     // let norm_x = vec![ vec![0.0, 0.0, 1.0], vec![0.0, 1.0, 1.0], vec![1.0, 0.0, 1.0], vec![1.0, 1.0, 1.0]].to_matrix_2d().unwrap();
     // let norm_y = vec![0.0, 1.0, 1.0, 0.0].to_matrix_2d().unwrap();
 
-    let norm_x = normalize_input_matrix(&x).to_matrix_2d().unwrap().transpose();
-    let norm_y = y.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
+    // let norm_x = normalize_input_matrix(&x).to_matrix_2d().unwrap().transpose();
+    // let norm_y = y.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
+    //
+    // let norm_test_x = normalize_input_matrix(&testX).to_matrix_2d().unwrap().transpose();
+    // let norm_test_y = testY.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
 
-    let norm_test_x = normalize_input_matrix(&testX).to_matrix_2d().unwrap().transpose();
-    let norm_test_y = testY.iter().map(|out| out / 100f64).collect::<Vec<f64>>().to_matrix_2d().unwrap();
+    let net_data = NetData::read_csv_file("/home/jason/Documents/RustProjects/rust_ann/data_sets/iris.txt",
+                        |line| {
+                            let vals = line.split(',').collect::<Vec<&str>>();
+                            let inputs: Vec<f64> = vals[..vals.len() - 1].iter().map(|x| x.parse().unwrap()).collect::<Vec<f64>>();
+                            let last_val = match vals[vals.len() - 1]{
+                                "Iris-setosa" => vec![1.0, 0.0, 0.0],
+                                "Iris-versicolor" => vec![0.0, 1.0, 0.0],
+                                "Iris-virginica" => vec![0.0, 0.0, 1.0],
+                                _ => vec![0.0, 0.0, 0.0]
+                            };
+                            let outputs: Vec<f64> = last_val;
+                            (inputs, outputs)
+                        }, |idx| {
+                            idx % 2 == 0
+                        }).unwrap();
+    let norm_x = net_data.normalized_train_data().0;
+    let norm_y = net_data.normalized_train_data().1;
+    let norm_test_x = net_data.normalized_test_data().0;
+    let norm_test_y = net_data.normalized_test_data().1;
+
+    // println!("TRAIN DATA: {:?}", &net_data.normalized_train_data());
+    // println!("TEST DATA: {:?}", &net_data.normalized_test_data());
     // println!("OUTPUT NORM: {:?}", norm_y);
 
-    let mut nn = ForwardNeuralNet::new(vec![2, 3, 1], 0.0001).unwrap();
+    let mut nn = ForwardNeuralNet::new(vec![4, 5, 3], 0.001).unwrap();
 
     // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
     // println!("PREDICTIONS: {:?}", nn.feed_forward(&norm_x));
@@ -301,12 +384,40 @@ fn main() {
     println!("FROBENIUS NORM: {:e}",  grad_norm);
     println!("norm < {:e}: {:?}", 10f64.powf(-8f64),  grad_norm < 10f64.powf(-8f64) as f64);
     nn.train(&norm_x, &norm_y, 0.15, 0.5, 60_000);
+    //
+    // let pred_train = nn.feed_forward(&norm_x);
+    // let c_train = nn.cost_function(&norm_y, &pred_train);
+    // let c_test = nn.cost_function(&norm_test_y, &pred_test);
+    // println!("COST TRAIN: {:?}", &c_train);
+    // println!("COST TEST: {:?}", &c_test);
+    // println!("DIFF: {:?}", &c_test - &c_train);
 
-    let pred_train = nn.feed_forward(&norm_x);
     let pred_test = nn.feed_forward(&norm_test_x);
-    let c_train = nn.cost_function(&norm_y, &pred_train);
-    let c_test = nn.cost_function(&norm_test_y, &pred_test);
-    println!("COST TRAIN: {:?}", &c_train);
-    println!("COST TEST: {:?}", &c_test);
-    println!("DIFF: {:?}", &c_test - &c_train);
+
+    println!("PRED ON TEST: {:?}", &pred_test);
+    println!("ACTUAL: {:?}", &norm_test_y);
+
+    let mut num_right = 0.0;
+
+    for i in 0..pred_test.get_rows() {
+        let pred = pred_test.get_row(i).unwrap();
+        let mut max_pred = 0.0;
+        let mut max_pred_idx = 0;
+        for (i, p) in pred.iter().enumerate() {
+            if *p > max_pred {
+                max_pred = *p;
+                max_pred_idx = i;
+            }
+        }
+
+        let actual_idx = norm_test_y.get_row(i).unwrap().iter().position(|x| *x == 1.0).unwrap();
+
+        // let error = (test - pred).abs();
+        if actual_idx == max_pred_idx {
+            num_right += 1.0;
+        }
+    }
+
+    println!("NUM RIGHT: {}", num_right);
+    println!("ACCURACY: {}%", (num_right / (norm_test_y.get_rows() as f64)) * 100.0);
 }
