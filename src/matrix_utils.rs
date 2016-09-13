@@ -3,6 +3,7 @@ use std::cmp::PartialEq;
 use std::ops::{Neg, Sub};
 use rand::random;
 use matrixmultiply;
+use utils::{vec_bin_op};
 
 #[derive(Clone)]
 pub struct Matrix2d {
@@ -128,12 +129,29 @@ impl Matrix2d {
     pub fn apply_fn<F>(&self, f: F) -> Matrix2d
         where F: Fn(f64) -> f64
     {
+        let len = self.matrix.len();
+        let xs = &self.get_matrix()[..len];
+
+        let mut out_vec = Vec::with_capacity(len);
+        unsafe {
+            out_vec.set_len(len);
+        }
+
+        {
+            let out_slice = &mut out_vec[..len];
+
+            for i in 0..len {
+                out_slice[i] = f(xs[i]);
+            }
+        }
+
         Matrix2d {
             n_rows: self.n_rows,
             n_cols: self.n_cols,
             rs: self.rs,
             cs: self.cs,
-            matrix: self.get_matrix().iter().map(move |el| f(*el) ).collect::<Vec<f64>>()
+            matrix: out_vec
+            // matrix: self.get_matrix().iter().map(move |el| f(*el) ).collect::<Vec<f64>>()
         }
     }
 
@@ -143,22 +161,25 @@ impl Matrix2d {
             n_cols: self.n_cols,
             rs: self.rs,
             cs: self.cs,
-            matrix: self.get_matrix().iter().map(move |el| *el * scalar).collect::<Vec<f64>>()
+            matrix: vec_bin_op(self.get_matrix(), &vec![scalar; self.n_rows * self.n_cols], |x, y| x * y)
+            // matrix: self.get_matrix().iter().map(move |el| *el * scalar).collect::<Vec<f64>>()
+
         }
     }
 
     pub fn mult(&self, m: &Matrix2d) -> Option<Matrix2d> {
         if  self.get_cols() == m.get_cols() &&
             self.get_rows() == m.get_rows() {
-            let mut m_matrix_iter = m.get_matrix().iter();
+            // let mut m_matrix_iter = m.get_matrix().iter();
             return Some(
                 Matrix2d {
                     n_rows: self.n_rows,
                     n_cols: self.n_cols,
                     rs: self.rs,
                     cs: self.cs,
-                    matrix: self.matrix.iter().map(|el| el * m_matrix_iter.next().unwrap())
-                .collect::<Vec<f64>>()
+                    matrix: vec_bin_op(self.get_matrix(), m.get_matrix(), |x, y| x * y)
+                //     self.matrix.iter().map(|el| el * m_matrix_iter.next().unwrap())
+                // .collect::<Vec<f64>>()
             });
         }
         None
@@ -167,15 +188,16 @@ impl Matrix2d {
     pub fn subtract(&self, m: &Matrix2d) -> Option<Matrix2d> {
         if  self.get_cols() == m.get_cols() &&
             self.get_rows() == m.get_rows() {
-            let mut m_matrix_iter = m.get_matrix().iter();
+            // let mut m_matrix_iter = m.get_matrix().iter();
             return Some(
                 Matrix2d {
                     n_rows: self.n_rows,
                     n_cols: self.n_cols,
                     rs: self.rs,
                     cs: self.cs,
-                    matrix: self.matrix.iter().map(|el| el - m_matrix_iter.next().unwrap())
-                        .collect::<Vec<f64>>()
+                    matrix: vec_bin_op(self.get_matrix(), m.get_matrix(), |x, y| x - y)
+                    // self.matrix.iter().map(|el| el - m_matrix_iter.next().unwrap())
+                    //     .collect::<Vec<f64>>()
                 });
         }
         None
@@ -184,15 +206,16 @@ impl Matrix2d {
     pub fn addition(&self, m: &Matrix2d) -> Option<Matrix2d> {
         if  self.get_cols() == m.get_cols() &&
             self.get_rows() == m.get_rows() {
-            let mut m_matrix_iter = m.get_matrix().iter();
+            // let mut m_matrix_iter = m.get_matrix().iter();
             return Some(
                 Matrix2d {
                     n_rows: self.n_rows,
                     n_cols: self.n_cols,
                     rs: self.rs,
                     cs: self.cs,
-                    matrix: self.matrix.iter().map(|el| el + m_matrix_iter.next().unwrap())
-                        .collect::<Vec<f64>>()
+                    matrix: vec_bin_op(self.get_matrix(), m.get_matrix(), |x, y| x + y)
+                    // self.matrix.iter().map(|el| el + m_matrix_iter.next().unwrap())
+                    //     .collect::<Vec<f64>>()
                 });
         }
         None

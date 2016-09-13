@@ -191,15 +191,15 @@ impl ForwardNeuralNet {
         // let mut djdws = self.cost_function_prime(input, output, &pred);
         // let mut sum_grad = 0.0;
 
-        for _ in 0..max_iters {
+        for i in 0..max_iters {
             let pred = self.feed_forward(input);
             // error = self.cost_function(output, &pred);
             let djdws = self.cost_function_prime(input, output, &pred);
 
-            // if i % 1000 == 0 {
-            //     let sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
-            //     println!("ITER: {}, SUM GRAD: {:?}", &i, &sum_grad);
-            // }
+            if i % 1000 == 0 {
+                let sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
+                println!("ITER: {}, SUM GRAD: {:?}", &i, &sum_grad);
+            }
 
             let mut djdws_iter = djdws.iter();
             for weight in self.weights.iter_mut() {
@@ -248,7 +248,7 @@ fn sigmoid_prime(z: f64) -> f64 {
 }
 
 fn main() {
-    let net_data = NetData::read_csv_file("/home/jason/Documents/RustProjects/rust_ann/data_sets/iris.txt",
+    let net_data = NetData::read_csv_file("./data_sets/iris.txt",
                         |line| {
                             let vals = line.split(',').collect::<Vec<&str>>();
                             let inputs: Vec<f64> = vals[..vals.len() - 1].iter().map(|x| x.parse().unwrap()).collect::<Vec<f64>>();
