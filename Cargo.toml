@@ -5,3 +5,4 @@ authors = ["Jason Cardinal <jcardinal@dealersocket.com>"]
 
 [dependencies]
 rand = "0.3.14"
+matrixmultiply = "0.1.9"

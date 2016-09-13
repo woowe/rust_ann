@@ -2,13 +2,13 @@ use std::fs::File;
 use std::io::Read;
 
 extern crate rand;
+extern crate matrixmultiply;
 
 mod matrix_utils;
 use matrix_utils::*;
 
-fn sum_vec(vec: Vec<f64>) -> f64 {
-    vec.iter().fold(0f64, |acc, x| acc + x)
-}
+mod utils;
+use utils::*;
 
 struct NetData {
     train_data: (Matrix2d, Matrix2d),
@@ -25,7 +25,7 @@ impl NetData {
         let mut contents = String::new();
 
         // read contents of csv file
-        file.read_to_string(&mut contents);
+        let _ = file.read_to_string(&mut contents);
         for (i, line) in contents.lines().enumerate() {
             // apply the parsing function on the current line
             let data = f(line);
@@ -63,7 +63,7 @@ impl NetData {
 struct ForwardNeuralNet {
     topology: Vec<usize>, // description of the net
     weights: Vec<Matrix2d>, // weights
-    deltaWeights: Vec<Matrix2d>, // gradient of weights
+    // deltaWeights: Vec<Matrix2d>, // gradient of weights
     activities: Vec<Matrix2d>, // the activity of the neurons: sum(W_i * x_i) where x is the inputs to the neuron
     activations: Vec<Matrix2d>, // the activation of the neurons: activation(sum(W_i * x_i))
     lambda: f64 // the regularization rate
@@ -78,10 +78,10 @@ impl ForwardNeuralNet {
                 weights: (0..topology.len() - 1).map(|idx| {
                     Matrix2d::fill_rng(topology[idx], topology[idx + 1])
                 }).collect::<Vec<Matrix2d>>(),
-                // init gradient of weights with zeros
-                deltaWeights: (0..topology.len() - 1).map(|idx| {
-                    Matrix2d::new(topology[idx], topology[idx + 1])
-                }).collect::<Vec<Matrix2d>>(),
+                // // init gradient of weights with zeros
+                // deltaWeights: (0..topology.len() - 1).map(|idx| {
+                //     Matrix2d::new(topology[idx], topology[idx + 1])
+                // }).collect::<Vec<Matrix2d>>(),
                 activities: Vec::new(),
                 activations: Vec::new(),
                 lambda: lambda
@@ -141,7 +141,7 @@ impl ForwardNeuralNet {
         // just a compute of the reciprocal of y_hat.get_rows() so I don't recompute in the loop
         let r_yhat: f64 = 1.0 / (y_hat.get_rows() as f64);
 
-        for n in (0..(self.topology.len() - 2)) {
+        for n in 0..(self.topology.len() - 2) {
             let idx = (self.topology.len() - 2) - n;
             let a_t = &self.activations[idx - 1].transpose();
             let prev_delta = deltas.last().unwrap().clone();
@@ -174,15 +174,15 @@ impl ForwardNeuralNet {
     }
 
     fn set_params(&mut self, params: Vec<f64>) {
-        let mut W_end = 0;
+        let mut w_end = 0;
         self.weights = Vec::new();
 
-        for n in (0..self.topology.len() - 1) {
+        for n in 0..self.topology.len() - 1 {
             let layer_size = &self.topology[n];
             let next_layer_size = &self.topology[n+1];
-            let W_start = W_end;
-            W_end = W_start + (layer_size * next_layer_size);
-            self.weights.push(params[W_start..W_end].reshape(*layer_size, *next_layer_size).unwrap());
+            let w_start = w_end;
+            w_end = w_start + (layer_size * next_layer_size);
+            self.weights.push(params[w_start..w_end].reshape(*layer_size, *next_layer_size).unwrap());
         }
     }
 
@@ -196,19 +196,19 @@ impl ForwardNeuralNet {
         return vec;
     }
 
-    fn train(&mut self, input: &Matrix2d, output: &Matrix2d, decay: f64, alpha: f64, max_iters: usize) -> () {
-        let mut pred = self.feed_forward(input);
-        let mut error = self.cost_function(output, &pred);
-        let mut djdws = self.cost_function_prime(input, output, &pred);
-        let mut sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
+    fn train(&mut self, input: &Matrix2d, output: &Matrix2d, alpha: f64, max_iters: usize) -> () {
+        // let mut pred = self.feed_forward(input);
+        // let mut error = self.cost_function(output, &pred);
+        // let mut djdws = self.cost_function_prime(input, output, &pred);
+        // let mut sum_grad = 0.0;
 
         for i in 0..max_iters {
-            pred = self.feed_forward(input);
-            error = self.cost_function(output, &pred);
-            djdws = self.cost_function_prime(input, output, &pred);
+            let pred = self.feed_forward(input);
+            // error = self.cost_function(output, &pred);
+            let djdws = self.cost_function_prime(input, output, &pred);
 
             if i % 1000 == 0 {
-                sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
+                let sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
                 println!("ITER: {}, SUM GRAD: {:?}", &i, &sum_grad);
             }
 
@@ -225,8 +225,8 @@ impl ForwardNeuralNet {
 }
 
 // numeric estimation of DJDW
-fn compute_numerical_gradients(N: &mut ForwardNeuralNet, X: &Matrix2d, y: &Matrix2d) -> Vec<f64> {
-    let params_init = N.get_params().to_matrix_2d().unwrap();
+fn compute_numerical_gradients(nn: &mut ForwardNeuralNet, x: &Matrix2d, y: &Matrix2d) -> Vec<f64> {
+    let params_init = nn.get_params().to_matrix_2d().unwrap();
     let mut num_grad = Matrix2d::new(params_init.get_rows(), 1);
     let mut peturb = Matrix2d::new(params_init.get_rows(), 1);
 
@@ -234,18 +234,18 @@ fn compute_numerical_gradients(N: &mut ForwardNeuralNet, X: &Matrix2d, y: &Matri
 
     for p in 0..params_init.get_rows() {
         peturb.get_matrix_mut()[p] = e;
-        N.set_params(params_init.addition(&peturb).unwrap().ravel());
-        let pred1 = N.feed_forward(X);
-        let loss2 = N.cost_function(y, &pred1);
-        N.set_params(params_init.subtract(&peturb).unwrap().ravel());
-        let pred2 = N.feed_forward(X);
-        let loss1 = N.cost_function(y, &pred2);
+        nn.set_params(params_init.addition(&peturb).unwrap().ravel());
+        let pred1 = nn.feed_forward(x);
+        let loss2 = nn.cost_function(y, &pred1);
+        nn.set_params(params_init.subtract(&peturb).unwrap().ravel());
+        let pred2 = nn.feed_forward(x);
+        let loss1 = nn.cost_function(y, &pred2);
 
         num_grad.get_matrix_mut()[p] = (loss2 - loss1) / (2f64 * e);
 
         peturb.get_matrix_mut()[p] = 0f64;
     }
-    N.set_params(params_init.ravel());
+    nn.set_params(params_init.ravel());
 
     return num_grad.ravel();
 }
@@ -258,14 +258,8 @@ fn sigmoid_prime(z: f64) -> f64 {
     (-z).exp() / ( (1f64 + (-z).exp()).powf(2f64) )
 }
 
-fn frobenius_norm(m: &Matrix2d) -> f64 {
-    m.get_matrix().iter().fold(0f64, |acc, el| {
-        acc + (el * el)
-    }).sqrt()
-}
-
 fn main() {
-    let net_data = NetData::read_csv_file("C:/Users/jcardinal/Documents/RustProjects/rust_ann/data_sets/iris.txt",
+    let net_data = NetData::read_csv_file("/home/jason/Documents/RustProjects/rust_ann/data_sets/iris.txt",
                         |line| {
                             let vals = line.split(',').collect::<Vec<&str>>();
                             let inputs: Vec<f64> = vals[..vals.len() - 1].iter().map(|x| x.parse().unwrap()).collect::<Vec<f64>>();
@@ -297,7 +291,7 @@ fn main() {
     println!("FROBENIUS NORM: {:e}",  grad_norm);
     println!("norm < {:e}: {:?}", 10f64.powf(-8f64),  grad_norm < 10f64.powf(-8f64) as f64);
 
-    nn.train(&norm_x, &norm_y, 0.15, 0.5, 60_000);
+    nn.train(&norm_x, &norm_y, 0.5, 60_000);
 
     let pred_test = nn.feed_forward(&norm_test_x);
 
@@ -338,6 +332,6 @@ fn main() {
         }
     }
 
-    println!("NUM RIGHT: {}", num_right);
+    println!("{} OUT OF {} RIGHT", num_right, norm_test_y.get_rows());
     println!("ACCURACY: {}%", (num_right / (norm_test_y.get_rows() as f64)) * 100.0);
 }

@@ -1,6 +1,7 @@
 use std::fmt;
 use rand::random;
-use std::ops::{Add, Neg, Sub};
+use std::ops::{Neg, Sub};
+use matrixmultiply;
 
 #[derive(PartialEq, Clone)]
 pub struct Matrix2d {
@@ -10,10 +11,10 @@ pub struct Matrix2d {
     matrix: Vec<f64>
 }
 
-pub enum AxisDir {
-    Row,
-    Column,
-}
+// pub enum AxisDir {
+//     Row,
+//     Column,
+// }
 
 impl Matrix2d {
     pub fn new(n_rows: usize, n_cols: usize) -> Matrix2d {
@@ -97,31 +98,28 @@ impl Matrix2d {
     }
 
 
-    pub fn get_axis(&self, axis: usize, dir: AxisDir) -> Option<Vec<f64>> {
-        match dir {
-            AxisDir::Row => self.get_row(axis),
-            AxisDir::Column => self.get_col(axis),
-        }
-    }
+    // pub fn get_axis(&self, axis: usize, dir: AxisDir) -> Option<Vec<f64>> {
+    //     match dir {
+    //         AxisDir::Row => self.get_row(axis),
+    //         AxisDir::Column => self.get_col(axis),
+    //     }
+    // }
 
     pub fn dot(&self, m: &Matrix2d) -> Option<Matrix2d> {
         if self.n_cols == m.get_rows() {
+            let mut c = vec![0.; self.n_rows * m.get_cols()];
+            // amazing magic happens here
+            unsafe {
+                matrixmultiply::dgemm(self.n_rows, self.n_cols, m.get_cols(),
+                    1., self.get_matrix().as_ptr(), self.n_cols as isize, 1,
+                    m.get_matrix().as_ptr(), m.get_cols() as isize, 1,
+                    0., c.as_mut_ptr(), m.get_cols() as isize, 1);
+            }
+
             return Some(Matrix2d {
                 n_rows: self.n_rows,
                 n_cols: m.get_cols(),
-                matrix: (0..self.n_rows)
-                    .map(move |row| {
-                        let _row = self.get_row(row).expect(&format!("The row ({}) provided exceded the number of rows in the matrix ({})", &row, self.n_rows - 1));
-                        (0..m.get_cols())
-                            .map(|col| {
-                                let _col = m.get_col(col).expect(&format!("The column ({}) provided exceded the number of columns in the matrix ({})", &col, self.n_cols - 1));
-
-                                _row.iter()
-                                    .enumerate()
-                                    .fold(0f64, |acc, (i, x)| (x * _col[i]) + acc)
-                            })
-                            .collect::<Vec<f64>>()
-                    }).collect::<Vec<Vec<f64>>>().iter().flat_map(|el| el.iter().cloned() ).collect::<Vec<f64>>(),
+                matrix: c,
             });
         }
         None
