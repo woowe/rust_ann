@@ -1,29 +1,25 @@
 use std::fmt;
-use rand::random;
+use std::cmp::PartialEq;
 use std::ops::{Neg, Sub};
+use rand::random;
 use matrixmultiply;
 
-#[derive(PartialEq, Clone)]
+#[derive(Clone)]
 pub struct Matrix2d {
     n_rows: usize,
     n_cols: usize,
-    // matrix: Vec<Vec<f64>>,
+    rs: usize,
+    cs: usize,
     matrix: Vec<f64>
 }
-
-// pub enum AxisDir {
-//     Row,
-//     Column,
-// }
 
 impl Matrix2d {
     pub fn new(n_rows: usize, n_cols: usize) -> Matrix2d {
         Matrix2d {
             n_rows: n_rows,
             n_cols: n_cols,
-            // matrix: (0..n_rows)
-            //     .map(|_| (0..n_cols).map(|_| 0f64).collect::<Vec<f64>>())
-            //     .collect::<Vec<Vec<f64>>>(),
+            rs: n_cols,
+            cs: 1,
             matrix: (0..n_rows*n_cols).map(|_| 0.0).collect::<Vec<f64>>()
         }
     }
@@ -32,7 +28,8 @@ impl Matrix2d {
         Matrix2d {
             n_rows: vec.len(),
             n_cols: vec[0].len(),
-            // matrix: vec.clone(),
+            rs: vec[0].len(),
+            cs: 1,
             matrix: vec.iter().flat_map(|el| el.iter().cloned() ).collect::<Vec<f64>>(),
         }
     }
@@ -41,9 +38,8 @@ impl Matrix2d {
         Matrix2d {
             n_rows: n_rows,
             n_cols: n_cols,
-            // matrix: (0..n_rows)
-            //     .map(|row| (0..n_cols).map(|col| random::<f64>()).collect::<Vec<f64>>())
-            //     .collect::<Vec<Vec<f64>>>(),
+            rs: n_cols,
+            cs: 1,
             matrix: (0..n_rows*n_cols)
                 .map(|_| random::<f64>()).collect::<Vec<f64>>()
         }
@@ -54,7 +50,7 @@ impl Matrix2d {
             return None;
         }
         Some((0..self.n_rows)
-            .map(|row| self.matrix[row * self.n_cols + n_col])
+            .map(|row| self.matrix[row * self.rs + n_col * self.cs])
             .collect::<Vec<f64>>())
     }
 
@@ -62,8 +58,9 @@ impl Matrix2d {
         if n_row > self.n_rows - 1 {
             return None;
         }
+        // Some(&self.get_matrix()[n_row * self.rs .. n_row * self.rs + self.n_cols])
         Some((0..self.n_cols)
-            .map(|col| self.matrix[n_row * self.n_cols + col])
+            .map(|col| self.matrix[n_row * self.rs + col * self.cs])
             .collect::<Vec<f64>>())
     }
 
@@ -71,10 +68,9 @@ impl Matrix2d {
         Matrix2d {
             n_rows: self.n_cols,
             n_cols: self.n_rows,
-            matrix: (0..self.n_cols)
-                .map(|col| self.get_col(col).unwrap())
-                .collect::<Vec<Vec<f64>>>().iter()
-                .flat_map(|el| el.iter().cloned() ).collect::<Vec<f64>>()
+            rs: self.cs,
+            cs: self.rs,
+            matrix: self.matrix.clone()
         }
     }
 
@@ -89,6 +85,16 @@ impl Matrix2d {
     }
 
     #[inline]
+    pub fn get_row_stride(&self) -> usize {
+        self.rs
+    }
+
+    #[inline]
+    pub fn get_col_stride(&self) -> usize {
+        self.cs
+    }
+
+    #[inline]
     pub fn get_matrix(&self) -> &Vec<f64> {
         &self.matrix
     }
@@ -97,28 +103,22 @@ impl Matrix2d {
         &mut self.matrix
     }
 
-
-    // pub fn get_axis(&self, axis: usize, dir: AxisDir) -> Option<Vec<f64>> {
-    //     match dir {
-    //         AxisDir::Row => self.get_row(axis),
-    //         AxisDir::Column => self.get_col(axis),
-    //     }
-    // }
-
     pub fn dot(&self, m: &Matrix2d) -> Option<Matrix2d> {
         if self.n_cols == m.get_rows() {
             let mut c = vec![0.; self.n_rows * m.get_cols()];
             // amazing magic happens here
             unsafe {
                 matrixmultiply::dgemm(self.n_rows, self.n_cols, m.get_cols(),
-                    1., self.get_matrix().as_ptr(), self.n_cols as isize, 1,
-                    m.get_matrix().as_ptr(), m.get_cols() as isize, 1,
+                    1., self.get_matrix().as_ptr(), self.rs as isize, self.cs as isize,
+                    m.get_matrix().as_ptr(), m.get_row_stride() as isize, m.get_col_stride() as isize,
                     0., c.as_mut_ptr(), m.get_cols() as isize, 1);
             }
 
             return Some(Matrix2d {
                 n_rows: self.n_rows,
                 n_cols: m.get_cols(),
+                rs: m.get_cols(),
+                cs: 1,
                 matrix: c,
             });
         }
@@ -129,19 +129,21 @@ impl Matrix2d {
         where F: Fn(f64) -> f64
     {
         Matrix2d {
-            n_rows: self.get_rows(),
-            n_cols: self.get_cols(),
-            matrix: self.get_matrix().iter()
-                .map(move |el| f(*el) ).collect::<Vec<f64>>()
+            n_rows: self.n_rows,
+            n_cols: self.n_cols,
+            rs: self.rs,
+            cs: self.cs,
+            matrix: self.get_matrix().iter().map(move |el| f(*el) ).collect::<Vec<f64>>()
         }
     }
 
     pub fn scale(&self, scalar: f64) -> Matrix2d {
         Matrix2d {
-            n_rows: self.get_rows(),
-            n_cols: self.get_cols(),
-            matrix: self.get_matrix().iter()
-                .map(move |el| *el * scalar).collect::<Vec<f64>>()
+            n_rows: self.n_rows,
+            n_cols: self.n_cols,
+            rs: self.rs,
+            cs: self.cs,
+            matrix: self.get_matrix().iter().map(move |el| *el * scalar).collect::<Vec<f64>>()
         }
     }
 
@@ -153,10 +155,11 @@ impl Matrix2d {
                 Matrix2d {
                     n_rows: self.n_rows,
                     n_cols: self.n_cols,
+                    rs: self.rs,
+                    cs: self.cs,
                     matrix: self.matrix.iter().map(|el| el * m_matrix_iter.next().unwrap())
-                        .collect::<Vec<f64>>()
-                }
-            );
+                .collect::<Vec<f64>>()
+            });
         }
         None
     }
@@ -169,10 +172,11 @@ impl Matrix2d {
                 Matrix2d {
                     n_rows: self.n_rows,
                     n_cols: self.n_cols,
+                    rs: self.rs,
+                    cs: self.cs,
                     matrix: self.matrix.iter().map(|el| el - m_matrix_iter.next().unwrap())
                         .collect::<Vec<f64>>()
-                }
-            );
+                });
         }
         None
     }
@@ -185,10 +189,11 @@ impl Matrix2d {
                 Matrix2d {
                     n_rows: self.n_rows,
                     n_cols: self.n_cols,
+                    rs: self.rs,
+                    cs: self.cs,
                     matrix: self.matrix.iter().map(|el| el + m_matrix_iter.next().unwrap())
                         .collect::<Vec<f64>>()
-                }
-            );
+                });
         }
         None
     }
@@ -204,6 +209,8 @@ impl Matrix2d {
                 Matrix2d {
                     n_rows: n_rows,
                     n_cols: n_cols,
+                    rs: n_cols,
+                    cs: 1,
                     matrix: self.matrix.clone()
                 }
             );
@@ -217,6 +224,8 @@ impl Matrix2d {
                 Matrix2d {
                     n_rows: n_rows,
                     n_cols: n_cols,
+                    rs: n_cols,
+                    cs: 1,
                     matrix: vec.clone()
                 }
             );
@@ -239,23 +248,35 @@ impl Matrix2d {
 
         for row in 0..self.n_rows {
             for col in 0..self.n_cols {
-                matrix_clone[row * self.n_cols + col] /= maxes[col];
+                matrix_clone[row * self.rs + col * self.cs] /= maxes[col];
             }
         }
 
         Matrix2d {
             n_rows: self.n_rows,
             n_cols: self.n_cols,
+            rs: self.rs,
+            cs: self.cs,
             matrix: matrix_clone.clone()
         }
     }
 }
 
+impl PartialEq for Matrix2d {
+    fn eq(&self, other: &Matrix2d) -> bool {
+        self.n_cols == other.get_cols() &&
+        self.n_rows == other.get_rows() &&
+        &self.matrix == other.get_matrix()
+    }
+}
+
 impl fmt::Debug for Matrix2d {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut output_string = format!("\nMatrix2d {{\n    n_rows: {},\n    n_cols: {},\n    matrix: ",
+        let mut output_string = format!("\nMatrix2d {{\n    n_rows: {},\n    n_cols: {},\n    rs: {}\n    cs: {}\n    matrix: ",
                                         self.n_rows,
-                                        self.n_cols);
+                                        self.n_cols,
+                                        self.rs,
+                                        self.cs);
 
         let spacing = (0..self.get_cols())
             .map(|idx| {
@@ -265,13 +286,11 @@ impl fmt::Debug for Matrix2d {
             })
             .collect::<Vec<usize>>();
 
-        // let mut matrix_iter = self.matrix.iter();
         for idx in 0..self.n_rows {
             if idx > 0 {
                 output_string = format!("{}            ", output_string);
             }
 
-            // let row = self.get_row(idx).unwrap();
             output_string.push('[');
             output_string.push(' ');
             let row = self.get_row(idx).unwrap();
@@ -296,14 +315,6 @@ impl fmt::Debug for Matrix2d {
         write!(f, "{},\n }}\n", output_string)
     }
 }
-
-// impl Add for Matrix2d {
-//     type Output = Option<Matrix2d>;
-//
-//     fn add(self, _rhs: Matrix2d) -> Option<Matrix2d> {
-//         self.addition(_rhs)
-//     }
-// }
 
 impl Neg for Matrix2d {
     type Output = Matrix2d;
@@ -378,62 +389,26 @@ impl ToMatrix2d for [f64] {
 #[cfg(test)]
 mod test {
     use std::option::Option;
-    use matrix_utils::{ToMatrix2d, Matrix2d, AxisDir};
+    use matrix_utils::{ToMatrix2d, Matrix2d};
 
     #[test]
     fn to_matrix_2d_vec() {
         let vec = vec![1f64, 2f64, 3f64].to_matrix_2d().expect("1d vec to matrix problem");
-        // println!("{:?}", vec);
         let m = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().expect("2d vec to matrix problem");
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![2f64], vec![3f64]].iter().flat_map(|el| el.iter().cloned()).collect::<Vec<f64>>(),
-        // };
-        // println!("{:?}", m);
+
         assert!(vec == m);
     }
 
-    // #[test]
-    // fn to_matrix_2d_nested_vec() {
-    //     let vec = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().unwrap();
-    //     let m vec![vec![1f64], vec![2f64], vec![3f64]]
-    //     let m = Matrix2d {
-    //         n_rows: 3usize,
-    //         n_cols: 1usize,
-    //         matrix: vec![vec![1f64], vec![2f64], vec![3f64]],
-    //     };
-    //     assert!(vec == m);
-    // }
-
     #[test]
     fn to_matrix_2d_transpose() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![2f64], vec![3f64]],
-        // };
-
         let m   = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().unwrap();
         let tm  = vec![vec![1f64, 2f64, 3f64]].to_matrix_2d().unwrap();
-
-        // let tm = Matrix2d {
-        //     n_rows: 1usize,
-        //     n_cols: 3usize,
-        //     matrix: vec![vec![1f64, 2f64, 3f64]],
-        // };
 
         assert!(m.transpose() == tm);
     }
 
     #[test]
     fn get_matrix2d_col_size() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![2f64], vec![3f64]],
-        // };
-
         let m = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().unwrap();
 
         assert!(m.get_cols() == 1usize);
@@ -441,12 +416,6 @@ mod test {
 
     #[test]
     fn get_matrix2d_row_size() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![2f64], vec![3f64]],
-        // };
-
         let m = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().unwrap();
 
         assert!(m.get_rows() == 3usize);
@@ -454,12 +423,6 @@ mod test {
 
     #[test]
     fn get_matrix2d_col() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![2f64], vec![3f64]],
-        // };
-
         let m = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().unwrap();
 
         assert!(m.get_col(0).unwrap() == vec![1f64, 2f64, 3f64]);
@@ -467,48 +430,13 @@ mod test {
 
     #[test]
     fn get_matrix2d_row() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![2f64], vec![3f64]],
-        // };
-
         let m = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().unwrap();
 
-        assert!(m.get_row(0).unwrap() == vec![1f64]);
-    }
-
-    #[test]
-    fn get_matrix2d_axis() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![2f64], vec![3f64]],
-        // };
-
-        let m = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().unwrap();
-
-        assert!(m.get_axis(0, AxisDir::Column).unwrap() == vec![1f64, 2f64, 3f64]);
-        assert!(m.get_axis(0, AxisDir::Row).unwrap() == vec![1f64]);
+        assert!(m.get_row(0).unwrap() == &[1f64]);
     }
 
     #[test]
     fn dot() {
-        // let m = Matrix2d {
-        //     n_rows: 2usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![2f64, 2f64], vec![2f64, 2f64]],
-        // };
-        //
-        // let m = vec![vec![2f64, 2f64], vec![2f64, 2f64]].to_matrix_2d().unwrap();
-        //
-        //
-        // let m1 = Matrix2d {
-        //     n_rows: 2usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![2f64, 2f64], vec![2f64, 2f64]],
-        // };
-
         let m = vec![vec![5f64, 8f64, -4f64], vec![6f64, 9f64, -5f64], vec![4f64, 7f64, -2f64]].to_matrix_2d().unwrap();
         let m1 = vec![2f64, -3f64, 1f64].to_matrix_2d().unwrap();
 
@@ -524,19 +452,16 @@ mod test {
     }
 
     #[test]
-    fn apply_fn() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![2f64], vec![3f64]],
-        // };
-        //
-        // let sm = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![4f64], vec![9f64]],
-        // };
+    fn dot_transpose() {
+        let m = vec![vec![1., 2.], vec![3., 4.], vec![5., 6.]].to_matrix_2d().unwrap();
+        let tm = m.transpose();
+        let dtm = vec![vec![5., 11., 17.], vec![11., 25., 39.], vec![17., 39., 61.]].to_matrix_2d().unwrap();
 
+        assert!(m.dot(&tm).unwrap() == dtm);
+    }
+
+    #[test]
+    fn apply_fn() {
         let m = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().unwrap();
         let sm = vec![vec![1f64], vec![4f64], vec![9f64]].to_matrix_2d().unwrap();
 
@@ -553,18 +478,6 @@ mod test {
 
     #[test]
     fn scale() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![1f64], vec![2f64], vec![3f64]],
-        // };
-        //
-        // let sm = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 1usize,
-        //     matrix: vec![vec![2f64], vec![4f64], vec![6f64]],
-        // };
-
         let m = vec![vec![1f64], vec![2f64], vec![3f64]].to_matrix_2d().unwrap();
         let sm = vec![vec![2f64], vec![4f64], vec![6f64]].to_matrix_2d().unwrap();
 
@@ -573,24 +486,6 @@ mod test {
 
     #[test]
     fn subtract() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]]
-        // };
-        //
-        // let m1 = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![0f64, -4f64, 3f64], vec![9f64, -4f64, -3f64]]
-        // };
-        //
-        // let sm = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![-1f64, 6f64, -3f64], vec![-9f64, 7f64, 9f64]]
-        // };
-
         let m = vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]].to_matrix_2d().unwrap();
         let m1 = vec![vec![0f64, -4f64, 3f64], vec![9f64, -4f64, -3f64]].to_matrix_2d().unwrap();
         let sm = vec![vec![-1f64, 6f64, -3f64], vec![-9f64, 7f64, 9f64]].to_matrix_2d().unwrap();
@@ -601,24 +496,6 @@ mod test {
 
     #[test]
     fn add() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]]
-        // };
-        //
-        // let m1 = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![0f64, -4f64, 3f64], vec![9f64, -4f64, -3f64]]
-        // };
-        //
-        // let sm = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![-1f64, -2f64, 3f64], vec![9f64, -1f64, 3f64]]
-        // };
-
         let m = vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]].to_matrix_2d().unwrap();
         let m1 = vec![vec![0f64, -4f64, 3f64], vec![9f64, -4f64, -3f64]].to_matrix_2d().unwrap();
         let sm = vec![vec![-1f64, -2f64, 3f64], vec![9f64, -1f64, 3f64]].to_matrix_2d().unwrap();
@@ -628,24 +505,6 @@ mod test {
 
     #[test]
     fn mult() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]]
-        // };
-        //
-        // let m1 = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![0f64, -4f64, 3f64], vec![9f64, -4f64, -3f64]]
-        // };
-        //
-        // let sm = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![0f64, -8f64, 0f64], vec![0f64, -12f64, -18f64]]
-        // };
-
         let m = vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]].to_matrix_2d().unwrap();
         let m1 = vec![vec![0f64, -4f64, 3f64], vec![9f64, -4f64, -3f64]].to_matrix_2d().unwrap();
         let sm = vec![vec![0f64, -8f64, 0f64], vec![0f64, -12f64, -18f64]].to_matrix_2d().unwrap();
@@ -656,12 +515,6 @@ mod test {
 
     #[test]
     fn ravel() {
-        // let m = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]]
-        // };
-
         let m = vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]].to_matrix_2d().unwrap();
         let rvec = vec![-1f64, 2f64, 0f64, 0f64, 3f64, 6f64];
 
@@ -671,15 +524,6 @@ mod test {
     #[test]
     fn reshape_2d() {
         let m = vec![vec![-1f64, 2f64, 0f64], vec![0f64, 3f64, 6f64]].reshape(3, 2).unwrap();
-
-        // println!("{:?}", m);
-
-        // let rm = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![-1f64, 2f64], vec![0f64, 0f64], vec![3f64, 6f64]]
-        // };
-
         let rm = vec![vec![-1f64, 2f64], vec![0f64, 0f64], vec![3f64, 6f64]].to_matrix_2d().unwrap();
 
         assert!(m == rm);
@@ -688,15 +532,6 @@ mod test {
     #[test]
     fn reshape_1d() {
         let m = vec![-1f64, 2f64, 0f64, 0f64, 3f64, 6f64].reshape(3, 2).unwrap();
-
-        // println!("{:?}", m);
-        //
-        // let rm = Matrix2d {
-        //     n_rows: 3usize,
-        //     n_cols: 2usize,
-        //     matrix: vec![vec![-1f64, 2f64], vec![0f64, 0f64], vec![3f64, 6f64]]
-        // };
-
         let rm = vec![vec![-1f64, 2f64], vec![0f64, 0f64], vec![3f64, 6f64]].to_matrix_2d().unwrap();
 
         assert!(m == rm);

@@ -82,8 +82,12 @@ impl ForwardNeuralNet {
                 // deltaWeights: (0..topology.len() - 1).map(|idx| {
                 //     Matrix2d::new(topology[idx], topology[idx + 1])
                 // }).collect::<Vec<Matrix2d>>(),
-                activities: Vec::new(),
-                activations: Vec::new(),
+                activities: (0..topology.len() - 1).map(|_| {
+                    Matrix2d::new(1, 1)
+                }).collect::<Vec<Matrix2d>>(),
+                activations: (0..topology.len() - 2).map(|_| {
+                    Matrix2d::new(1, 1)
+                }).collect::<Vec<Matrix2d>>(),
                 lambda: lambda
             })
         }
@@ -92,28 +96,13 @@ impl ForwardNeuralNet {
 
     fn feed_forward(&mut self, input: &Matrix2d) -> Matrix2d {
         // compute activity of X ⊗ W(0)
-        if None == self.activities.get(0) {
-            self.activities.push(input.dot(&self.weights[0]).expect("Dot product went wrong X*W(0)"));
-        } else {
-            self.activities[0] = input.dot(&self.weights[0]).expect("Dot product went wrong X*W(0)");
-        }
+        self.activities[0] = input.dot(&self.weights[0]).expect("Dot product went wrong X*W(0)");
 
         for (idx, weight) in self.weights.iter().enumerate().skip(1) {
             // compute the activation of activation( activities(idx - 1) )
-            let activation  = self.activities[idx - 1].apply_fn(sigmoid);
-            if None == self.activations.get(idx - 1) {
-                self.activations.push(activation);
-            } else {
-                self.activations[idx - 1] = activation;
-            }
-
+            self.activations[idx - 1] = self.activities[idx - 1].apply_fn(sigmoid);
             // compute activity of activation(idx - 1) ⊗ W(idx)
-            let activity    = self.activations[idx - 1].dot(weight).expect(&format!("Dot product went wrong: a({})*W({})", idx - 1, idx));
-            if None == self.activities.get(idx) {
-                self.activities.push(activity);
-            }else {
-                self.activities[idx] = activity
-            }
+            self.activities[idx] = self.activations[idx - 1].dot(weight).expect(&format!("Dot product went wrong: a({})*W({})", idx - 1, idx));
         }
 
         // compute the last activation activation( activities(last) )
@@ -123,9 +112,9 @@ impl ForwardNeuralNet {
     fn cost_function(&mut self, output: &Matrix2d, pred: &Matrix2d) -> f64 {
         let y_hat = pred;
         let cost = ((*output).clone() - (*y_hat).clone()).expect("Subtract went wrong (Y - yhat)").apply_fn(|x| x * x);
-        let w_sum = self.weights.iter().fold(0f64, |acc, w| acc + sum_vec(w.apply_fn(|x| x*x).ravel()) );
+        let w_sum = self.weights.iter().fold(0f64, |acc, w| acc + sum_vec(&w.apply_fn(|x| x*x).get_matrix()[..]) );
         // J = 1/(2m) ∑(y - ŷ)^2 + λ/2 * ∑(W(i))
-        return 0.5f64 * sum_vec(cost.ravel()) / (pred.get_rows() as f64) + ( (self.lambda/2.0)* w_sum );
+        return 0.5f64 * sum_vec(&cost.get_matrix()[..]) / (pred.get_rows() as f64) + ( (self.lambda/2.0)* w_sum );
     }
 
     fn cost_function_prime(&mut self, input: &Matrix2d, output: &Matrix2d, pred: &Matrix2d) -> Vec<Matrix2d> {
@@ -202,15 +191,15 @@ impl ForwardNeuralNet {
         // let mut djdws = self.cost_function_prime(input, output, &pred);
         // let mut sum_grad = 0.0;
 
-        for i in 0..max_iters {
+        for _ in 0..max_iters {
             let pred = self.feed_forward(input);
             // error = self.cost_function(output, &pred);
             let djdws = self.cost_function_prime(input, output, &pred);
 
-            if i % 1000 == 0 {
-                let sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
-                println!("ITER: {}, SUM GRAD: {:?}", &i, &sum_grad);
-            }
+            // if i % 1000 == 0 {
+            //     let sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
+            //     println!("ITER: {}, SUM GRAD: {:?}", &i, &sum_grad);
+            // }
 
             let mut djdws_iter = djdws.iter();
             for weight in self.weights.iter_mut() {

@@ -1,6 +1,6 @@
-use matrix_utils::Matrix2d;
+use matrix_utils::{ToMatrix2d, Matrix2d};
 
-pub fn sum_vec(vec: Vec<f64>) -> f64 {
+pub fn sum_vec(vec: &[f64]) -> f64 {
     vec.iter().fold(0f64, |acc, x| acc + x)
 }
 
@@ -18,5 +18,6 @@ fn sum_vec_test() {
 
 #[test]
 fn frobenius_norm_test() {
-    assert!(29.0 == frobenius_norm(vec![1.0, 2.0, 3.0, 4.0].to_matrix_2d().unwrap()));
+    // 4 + 9 + 16 25 29
+    assert!((30f64).sqrt() == frobenius_norm(&vec![1.0, 2.0, 3.0, 4.0].to_matrix_2d().unwrap()));
 }
