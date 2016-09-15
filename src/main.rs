@@ -185,30 +185,38 @@ impl ForwardNeuralNet {
         return vec;
     }
 
-    fn train(&mut self, input: &Matrix2d, output: &Matrix2d, alpha: f64, max_iters: usize) -> () {
-        // let mut pred = self.feed_forward(input);
-        // let mut error = self.cost_function(output, &pred);
-        // let mut djdws = self.cost_function_prime(input, output, &pred);
-        // let mut sum_grad = 0.0;
+    fn train(&mut self, input: &Matrix2d, output: &Matrix2d, batch_size: usize, alpha: f64, max_iters: usize) -> () {
+        let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
+        let shuffled_input = input.shuffle(seed).mini_batch(batch_size);
+        let shuffled_output = output.shuffle(seed).mini_batch(batch_size);
+
+        let mut training_data = shuffled_input.iter().map(|el| el.clone()).zip(shuffled_output).collect::<Vec<(Matrix2d,Matrix2d)>>();
 
         for i in 0..max_iters {
-            let pred = self.feed_forward(input);
-            // error = self.cost_function(output, &pred);
-            let djdws = self.cost_function_prime(input, output, &pred);
-
-            if i % 1000 == 0 {
-                let sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
-                println!("ITER: {}, SUM GRAD: {:?}", &i, &sum_grad);
+            for &(ref s_input, ref s_output) in training_data.iter() {
+                let pred = self.feed_forward(&s_input);
+                // error = self.cost_function(output, &pred);
+                let djdws = self.cost_function_prime(&s_input, &s_output, &pred);
+                let mut djdws_iter = djdws.iter();
+                for weight in self.weights.iter_mut() {
+                    let djdw = (*djdws_iter.next().unwrap()).scale(alpha);
+                    let tmp_weight = ((*weight).clone() - djdw).unwrap();
+                    // gradient descent
+                    // W(i) = W(i) - alhpa * DJDW
+                    *weight = tmp_weight;
+                }
             }
 
-            let mut djdws_iter = djdws.iter();
-            for weight in self.weights.iter_mut() {
-                let djdw = (*djdws_iter.next().unwrap()).scale(alpha);
-                let tmp_weight = ((*weight).clone() - djdw).unwrap();
-                // gradient descent
-                // W(i) = W(i) - alhpa * DJDW
-                *weight = tmp_weight;
-            }
+            // if i % 1000 == 0 {
+            //     let sum_grad = djdws.iter().fold(0.0, |acc, djdw| acc + frobenius_norm(djdw));
+            //     println!("ITER: {}, SUM GRAD: {:?}", &i, &sum_grad);
+            // }
+
+            let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
+            let _ = training_data.iter_mut().map(|&mut (ref mut si,ref mut so)| {
+                *si = si.shuffle(seed);
+                *so = so.shuffle(seed);
+            });
         }
     }
 }
@@ -240,11 +248,12 @@ fn compute_numerical_gradients(nn: &mut ForwardNeuralNet, x: &Matrix2d, y: &Matr
 }
 
 fn sigmoid(z: f64) -> f64 {
-    1f64 / (1f64 + (-z as f64).exp())
+    1f64 / (1f64 + (-z).exp())
 }
 
 fn sigmoid_prime(z: f64) -> f64 {
-    (-z).exp() / ( (1f64 + (-z).exp()).powf(2f64) )
+    sigmoid(z) * (1. - sigmoid(z))
+    // (-z).exp() / ( (1f64 + (-z).exp()).powf(2f64) )
 }
 
 fn main() {
@@ -277,10 +286,14 @@ fn main() {
     // check if I am computing my gradients correctly
     // ‖ nn_cg - cng ‖ / ‖ nn_cg + cng ‖ < 10e-8
     let grad_norm = frobenius_norm(&nn_cg.subtract(&cng).unwrap()) / frobenius_norm(&nn_cg.addition(&cng).unwrap());
+    assert!(grad_norm < 1e-8);
     println!("FROBENIUS NORM: {:e}",  grad_norm);
     println!("norm < {:e}: {:?}", 10f64.powf(-8f64),  grad_norm < 10f64.powf(-8f64) as f64);
 
-    nn.train(&norm_x, &norm_y, 0.5, 60_000);
+    // println!("ACTUAL INPUT: {:?}", &norm_x);
+    // println!("ACTUAL OUTPUT: {:?}", &norm_y);
+
+    nn.train(&norm_x, &norm_y, 15, 0.5, 10000);
 
     let pred_test = nn.feed_forward(&norm_test_x);
 

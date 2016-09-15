@@ -1,7 +1,8 @@
 use std::fmt;
 use std::cmp::PartialEq;
 use std::ops::{Neg, Sub};
-use rand::random;
+use rand::distributions::{IndependentSample, Range};
+use rand::{random, SeedableRng, StdRng};
 use matrixmultiply;
 use utils::{vec_bin_op};
 
@@ -283,6 +284,45 @@ impl Matrix2d {
             matrix: matrix_clone.clone()
         }
     }
+
+    pub fn shuffle<'a>(&self, seed: &'a [usize]) -> Matrix2d
+     {
+        // let seed: &[_] = &[1, 2, 3, 4];
+        let mut rng: StdRng = StdRng::from_seed(seed);
+        let sample = Range::new(0, self.get_rows());
+
+        let mut out_matrix = Matrix2d {
+            n_rows: self.n_rows,
+            n_cols: self.n_cols,
+            rs: self.rs,
+            cs: self.cs,
+            matrix: vec![0.; self.n_rows * self.n_cols]
+        };
+
+        for row in 0..self.n_rows {
+            let rnd_row = sample.ind_sample(&mut rng);
+            for col in 0..self.n_cols {
+                out_matrix.get_matrix_mut()[row * self.rs + col * self.cs] =
+                    self.matrix[rnd_row * self.rs + col * self.cs];
+            }
+        }
+
+        out_matrix
+    }
+
+    pub fn mini_batch(&self, batch_size: usize) -> Vec<Matrix2d> {
+        let mut all_rows = Vec::new();
+        for row in 0..self.n_rows {
+            all_rows.push(self.get_row(row).unwrap());
+        }
+
+        let slice = &all_rows[..];
+        let mut out_vec = Vec::new();
+        for c in slice.chunks(batch_size) {
+            out_vec.push(c.to_vec().to_matrix_2d().unwrap());
+        }
+        out_vec
+    }
 }
 
 impl PartialEq for Matrix2d {
@@ -314,6 +354,7 @@ impl fmt::Debug for Matrix2d {
                 output_string = format!("{}            ", output_string);
             }
 
+            // output_string = format!("{}{}", output_string, format!("{} [ ", idx));
             output_string.push('[');
             output_string.push(' ');
             let row = self.get_row(idx).unwrap();

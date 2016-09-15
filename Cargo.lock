@@ -24,3 +24,7 @@ dependencies = [
  "libc 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
+[metadata]
+"checksum libc 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)" = "23e3757828fa702a20072c37ff47938e9dd331b92fac6e223d26d4b7a55f7ee2"
+"checksum matrixmultiply 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "dee390ed044d68f8f5416fc41895ea11cd9d9930e5d6a8ca6905b73bfc83bcf3"
+"checksum rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)" = "2791d88c6defac799c3f20d74f094ca33b9332612d9aef9078519c82e4fe04a5"
