@@ -3,6 +3,7 @@ name = "rust_ann"
 version = "0.1.0"
 dependencies = [
  "matrixmultiply 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num_rust 0.1.0 (git+https://github.com/woowe/num_rust.git)",
  "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -17,6 +18,15 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "num_rust"
+version = "0.1.0"
+source = "git+https://github.com/woowe/num_rust.git#451b3f6f0d8f71533817007921f8bb13a7d0547a"
+dependencies = [
+ "matrixmultiply 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "rand"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -27,4 +37,5 @@ dependencies = [
 [metadata]
 "checksum libc 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)" = "23e3757828fa702a20072c37ff47938e9dd331b92fac6e223d26d4b7a55f7ee2"
 "checksum matrixmultiply 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "dee390ed044d68f8f5416fc41895ea11cd9d9930e5d6a8ca6905b73bfc83bcf3"
+"checksum num_rust 0.1.0 (git+https://github.com/woowe/num_rust.git)" = "<none>"
 "checksum rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)" = "2791d88c6defac799c3f20d74f094ca33b9332612d9aef9078519c82e4fe04a5"
