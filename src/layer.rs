@@ -3,13 +3,11 @@ use neural_net::{NNetError};
 use activation_function::ActivationFunc;
 
 pub trait Layer {
-    type AF: ActivationFunc;
-
     fn set_activity(&mut self, X: &Matrix2d, W: &Matrix2d) -> Result<(), NNetError>;
     fn get_activity(&self) -> &Matrix2d;
     fn get_activation(&self) -> Matrix2d;
     fn len(&self) -> usize;
-    fn get_activation_fn(&self) -> &Self::AF;
+    fn get_gradient(&self) -> Matrix2d;
 }
 
 pub struct Dense<AF: ActivationFunc> {
@@ -32,8 +30,6 @@ impl<AF: ActivationFunc> Dense<AF> {
 }
 
 impl<AF: ActivationFunc> Layer for Dense<AF> {
-    type AF = AF;
-
     fn set_activity(&mut self, X: &Matrix2d, W: &Matrix2d) -> Result<(), NNetError> {
         let new_activity = match X.dot(W) {
             Some(v) => v,
@@ -56,7 +52,7 @@ impl<AF: ActivationFunc> Layer for Dense<AF> {
         self.len
     }
 
-    fn get_activation_fn(&self) -> &Self::AF {
-        &self.activation_func
+    fn get_gradient(&self) -> Matrix2d {
+        self.activity.apply_fn(|z| { self.activation_func.activation_fn_prime(z) })
     }
 }

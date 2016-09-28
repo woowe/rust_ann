@@ -15,16 +15,16 @@ macro_rules! try_net {
 
 pub trait CostFunction {
     fn cost(&self, actual: &Matrix2d, pred: &Matrix2d) -> Result<f64, NNetError>;
-    fn cost_prime(&self, input: &Matrix2d, actual: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError>;
+    fn cost_prime(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError>;
 }
 
 pub struct MSE_Reg<'a, Net: 'a + NeuralNet> {
-    net: &'a Net,
+    net: &'a mut Net,
     lambda: f64
 }
 
 impl<'a, Net: 'a + NeuralNet> MSE_Reg<'a, Net> {
-    pub fn new(net: &'a Net, lambda: f64) -> MSE_Reg<'a, Net> {
+    pub fn new(net: &'a mut Net, lambda: f64) -> MSE_Reg<'a, Net> {
         MSE_Reg {
             net: net,
             lambda: lambda
@@ -40,34 +40,40 @@ impl<'a, Net: 'a + NeuralNet> CostFunction for MSE_Reg<'a, Net> {
         Ok(0.5f64 * sum_vec(&cost.get_matrix()[..]) / (pred.get_rows() as f64) + ( (self.lambda/2.0)* w_sum ))
     }
 
-    fn cost_prime(&self, input: &Matrix2d, actual: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError> {
+    fn cost_prime(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError> {
         let mut deltas = Vec::new();
         let mut djdw = Vec::new();
+        let mut cost_matrix: Matrix2d;
+        // just a compute of the reciprocal of y_hat.get_rows() so I don't recompute in the loop
+        let mut r_yhat: f64;
+        {
+            let y_hat = try!(self.net.predict(input));
+            r_yhat = 1.0 / (y_hat.get_rows() as f64);
+            // let z_last = match self.net.get_layers().last() {
+            //     Some(v) => v.get_activity(),
+            //     None => return Err(NNetError::GradientError)
+            // };
 
-        let y_hat = try!(self.net.predict(input));
-        let z_last = match self.net.get_layers().last() {
-            Some(v) => v.get_activity(),
-            None => return Err(NNetError::GradientError)
-        };
-
-        let cost_matrix = match actual.clone() - y_hat.clone() {
-            Some(v) => -v,
-            None => return Err(NNetError::GradientError)
-        };
+            cost_matrix = match actual.clone() - y_hat.clone() {
+                Some(v) => -v,
+                None => return Err(NNetError::GradientError)
+            };
+        }
 
         // δ(last) = -(y - ŷ) * activation_prime(activities(last))
         let layer = match self.net.get_layers().last() {
             Some(v) => v,
             None => return Err(NNetError::GradientError)
         };
-        let delta = match cost_matrix.mult(&z_last.apply_fn( layer.get_activation_fn().activation_fn_prime )) {
+        // let activity = match self.net.get_activities().last() {
+        //     Some(v) => v,
+        //     None => return Err(NNetError::GradientError)
+        // };
+        let delta = match cost_matrix.mult(&layer.get_gradient()) {
             Some(tmp) =>  tmp,
             None => return Err(NNetError::GradientError)
         };
         deltas.push(delta);
-
-        // just a compute of the reciprocal of y_hat.get_rows() so I don't recompute in the loop
-        let r_yhat: f64 = 1.0 / (y_hat.get_rows() as f64);
 
         let layer_len = self.net.get_layers().len();
 
@@ -90,8 +96,9 @@ impl<'a, Net: 'a + NeuralNet> CostFunction for MSE_Reg<'a, Net> {
             djdw.push(dw);
 
             let w_t = &self.net.get_weights()[idx].transpose();
-            let layer = self.net.get_layers()[idx - 1];
-            let z_prime = &layer.get_activity().apply_fn( layer.get_activation_fn().activation_fn_prime );
+            let layer = &self.net.get_layers()[idx - 1];
+            let activity = &layer.get_activity();
+            let z_prime = layer.get_gradient();
 
             // δ(idx) = δ(idx - 1) ⊗ W(idx).T * activation_prime(activities(idx - 1))
             let v = match prev_delta.dot(w_t) {
@@ -99,7 +106,7 @@ impl<'a, Net: 'a + NeuralNet> CostFunction for MSE_Reg<'a, Net> {
                 None => return Err(NNetError::GradientError)
             };
 
-            let delta = match v.mult(z_prime) {
+            let delta = match v.mult(&z_prime) {
                 Some(tmp) => tmp,
                 None => return Err(NNetError::GradientError)
             };
@@ -113,7 +120,7 @@ impl<'a, Net: 'a + NeuralNet> CostFunction for MSE_Reg<'a, Net> {
             None => return Err(NNetError::GradientError)
         };
 
-        let w = &self.net.weights[0].scale(self.lambda);
+        let w = &self.net.get_weights()[0].scale(self.lambda);
         let v = match input.transpose().dot(l_d) {
             Some(tmp) => tmp,
             None => return Err(NNetError::GradientError)
@@ -126,6 +133,6 @@ impl<'a, Net: 'a + NeuralNet> CostFunction for MSE_Reg<'a, Net> {
 
         djdw.push(dw);
         djdw.reverse();
-        return Ok(djdw);
+        Ok(djdw)
     }
 }

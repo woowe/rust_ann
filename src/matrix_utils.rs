@@ -266,7 +266,7 @@ impl Matrix2d {
                         if acc < x.abs() {
                             return x.abs();
                         }
-                        return acc;
+                        acc
                     }));
         }
 

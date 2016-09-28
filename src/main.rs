@@ -109,7 +109,6 @@ impl NetData {
 //         }
 //         None
 //     }
-//
 //     fn feed_forward(&mut self, input: &Matrix2d) -> Matrix2d {
 //         // compute activity of X ⊗ W(0)
 //         self.activities[0] = input.dot(&self.weights[0]).expect("Dot product went wrong X*W(0)");
