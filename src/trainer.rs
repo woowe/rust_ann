@@ -4,18 +4,19 @@ use rand;
 use cost_function::CostFunction;
 
 pub trait Trainer {
-    fn optimize(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError>;
+    fn optimize(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<(), NNetError>;
 }
 
-pub struct MiniBatchSGD<'a, NN: 'a + NeuralNet> {
+pub struct MiniBatchSGD<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> {
     epochs: usize,
     batch_size: usize,
     learn_rate: f64,
-    net: &'a mut NN
+    net: &'a mut NN,
+    cost: &'a mut C
 }
 
-impl<'a, NN: 'a + NeuralNet> MiniBatchSGD<'a, NN> {
-    fn new(net: &'a mut NN, epochs: usize, batch_size: usize, learn_rate: f64) -> Result<MiniBatchSGD<'a, NN>, NNetError> {
+impl<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> MiniBatchSGD<'a, NN, C> {
+    pub fn new(net: &'a mut NN, cost: &'a mut C, epochs: usize, batch_size: usize, learn_rate: f64) -> Result<MiniBatchSGD<'a, NN, C>, NNetError> {
         if epochs < 0 || batch_size < 0 {
             return Err(NNetError::MiniBatchSGDInitError)
         }
@@ -23,13 +24,14 @@ impl<'a, NN: 'a + NeuralNet> MiniBatchSGD<'a, NN> {
             epochs: epochs,
             batch_size: batch_size,
             learn_rate: learn_rate,
-            net: net
+            net: net,
+            cost: cost
         })
     }
 }
 
-impl<'a, NN: 'a + NeuralNet> Trainer for MiniBatchSGD<'a, NN> {
-    fn optimize(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError> {
+impl<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, NN, C> {
+    fn optimize(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<(), NNetError> {
         let mut net_weights = self.net.get_weights().to_vec();
         let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
         let shuffled_input = input.shuffle(seed).mini_batch(self.batch_size);
@@ -37,11 +39,11 @@ impl<'a, NN: 'a + NeuralNet> Trainer for MiniBatchSGD<'a, NN> {
 
         let mut training_data = shuffled_input.iter().map(|el| el.clone()).zip(shuffled_actual).collect::<Vec<(Matrix2d,Matrix2d)>>();
 
-        let mut djdws: Vec<Matrix2d>;
+        let mut djdws: Vec<Matrix2d> = Vec::new();
 
         for i in 0..self.epochs {
             for &(ref s_input, ref s_output) in training_data.iter() {
-                djdws = try!(self.net.get_cost().cost_prime(&s_input, &s_output));
+                djdws = try!(self.cost.cost_prime(&mut self.net.clone(), &s_input, &s_output));
                 let mut djdws_iter = djdws.iter();
                 for weight in net_weights.iter_mut() {
                     // gradient descent
@@ -66,6 +68,7 @@ impl<'a, NN: 'a + NeuralNet> Trainer for MiniBatchSGD<'a, NN> {
             });
         }
 
-        Ok(djdws)
+        self.net.set_weights(djdws);
+        Ok(())
     }
 }

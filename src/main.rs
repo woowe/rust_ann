@@ -5,14 +5,17 @@ extern crate rand;
 extern crate matrixmultiply;
 extern crate num_rust;
 
-mod matrix_utils;
-use matrix_utils::*;
+use num_rust::Matrix2d;
+use num_rust::ext::traits::ToMatrix2d;
 
-mod utils;
-use utils::*;
+// mod matrix_utils;
+// use matrix_utils::*;
+//
+// mod utils;
+// use utils::*;
 
 mod neural_net;
-use neural_net::Sequential;
+use neural_net::{NeuralNet, Sequential};
 
 mod layer;
 use layer::Dense;
@@ -24,7 +27,7 @@ mod activation_function;
 use activation_function::Sigmoid;
 
 mod trainer;
-use trainer::MiniBatchSGD;
+use trainer::{Trainer, MiniBatchSGD};
 
 struct NetData {
     train_data: (Matrix2d, Matrix2d),
@@ -264,6 +267,16 @@ impl NetData {
 //     // (-z).exp() / ( (1f64 + (-z).exp()).powf(2f64) )
 // }
 
+macro_rules! print_try {
+    ($expr:expr) => (match $expr {
+        Ok(val) => val,
+        Err(err) => {
+            print!("{:?}", err);
+            panic!();
+        }
+    })
+}
+
 fn main() {
     let net_data = NetData::read_csv_file("./data_sets/iris.txt",
                         |line| {
@@ -280,9 +293,24 @@ fn main() {
                         }, |idx| {
                             idx % 2 == 0
                         }).unwrap();
-
+    // println!("HELLO");
     let (norm_x, norm_y) = net_data.normalized_train_data();
     let (norm_test_x, norm_test_y) = net_data.normalized_test_data();
+    // let mut topology: Vec<Dense<Sigmoid>> = Vec::new();
+    let mut net = print_try!(Sequential::new(vec![
+        print_try!(Dense::new(4, Sigmoid)),
+        print_try!(Dense::new(5, Sigmoid)),
+        print_try!(Dense::new(3, Sigmoid))
+    ]));
+    // println!("{:?}", net.predict(&norm_test_x));
+
+    let mut cost_func = MSE_Reg::new(0.001);
+
+    {
+        let mut trainer = print_try!(MiniBatchSGD::new(&mut net, &mut cost_func, 10_000, 15, 0.5));
+        println!("{:?}", trainer.optimize(&norm_x, &norm_y));
+    }
+
 
     // let mut nn = ForwardNeuralNet::new(vec![4, 5, 3], 0.0001).unwrap();
 
@@ -303,45 +331,45 @@ fn main() {
 
     // nn.train(&norm_x, &norm_y, 15, 0.5, 10000);
     //
-    // let pred_test = nn.feed_forward(&norm_test_x);
-    //
-    // let mut num_right = 0.0;
-    //
-    // for i in 0..pred_test.get_rows() {
-    //     let pred = pred_test.get_row(i).unwrap();
-    //     let mut max_pred = 0.0;
-    //     let mut max_pred_idx = 0;
-    //     for (i, p) in pred.iter().enumerate() {
-    //         if *p > max_pred {
-    //             max_pred = *p;
-    //             max_pred_idx = i;
-    //         }
-    //     }
-    //
-    //     let actual_idx = norm_test_y.get_row(i).unwrap().iter().position(|x| *x == 1.0).unwrap();
-    //
-    //
-    //     let nn_pred = match max_pred_idx {
-    //         0 => "Iris-setosa",
-    //         1 => "Iris-versicolor",
-    //         2 => "Iris-virginica",
-    //         _ => ""
-    //     };
-    //
-    //     let actual_pred = match actual_idx {
-    //         0 => "Iris-setosa",
-    //         1 => "Iris-versicolor",
-    //         2 => "Iris-virginica",
-    //         _ => ""
-    //     };
-    //
-    //     println!("ACTUAL: {}, PRED: {}, %{} CONFIDENCE", actual_pred, nn_pred, ((max_pred) * 100.0).round());
-    //
-    //     if actual_idx == max_pred_idx {
-    //         num_right += 1.0;
-    //     }
-    // }
-    //
-    // println!("{} OUT OF {} RIGHT", num_right, norm_test_y.get_rows());
-    // println!("ACCURACY: {}%", (num_right / (norm_test_y.get_rows() as f64)) * 100.0);
+    let pred_test = net.predict(&norm_test_x).unwrap();
+
+    let mut num_right = 0.0;
+
+    for i in 0..pred_test.get_rows() {
+        let pred = pred_test.get_row(i).unwrap();
+        let mut max_pred = 0.0;
+        let mut max_pred_idx = 0;
+        for (i, p) in pred.iter().enumerate() {
+            if *p > max_pred {
+                max_pred = *p;
+                max_pred_idx = i;
+            }
+        }
+
+        let actual_idx = norm_test_y.get_row(i).unwrap().iter().position(|x| *x == 1.0).unwrap();
+
+
+        let nn_pred = match max_pred_idx {
+            0 => "Iris-setosa",
+            1 => "Iris-versicolor",
+            2 => "Iris-virginica",
+            _ => ""
+        };
+
+        let actual_pred = match actual_idx {
+            0 => "Iris-setosa",
+            1 => "Iris-versicolor",
+            2 => "Iris-virginica",
+            _ => ""
+        };
+
+        println!("ACTUAL: {}, PRED: {}, %{} CONFIDENCE", actual_pred, nn_pred, ((max_pred) * 100.0).round());
+
+        if actual_idx == max_pred_idx {
+            num_right += 1.0;
+        }
+    }
+
+    println!("{} OUT OF {} RIGHT", num_right, norm_test_y.get_rows());
+    println!("ACCURACY: {}%", (num_right / (norm_test_y.get_rows() as f64)) * 100.0);
 }

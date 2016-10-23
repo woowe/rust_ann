@@ -3,13 +3,15 @@ use neural_net::{NNetError};
 use activation_function::ActivationFunc;
 
 pub trait Layer {
-    fn set_activity(&mut self, X: &Matrix2d, W: &Matrix2d) -> Result<(), NNetError>;
+    fn set_activity(&mut self, x: &Matrix2d, w: &Matrix2d) -> Result<(), NNetError>;
     fn get_activity(&self) -> &Matrix2d;
     fn get_activation(&self) -> Matrix2d;
     fn len(&self) -> usize;
     fn get_gradient(&self) -> Matrix2d;
+    fn set_input(&mut self, x: &Matrix2d) -> ();
 }
 
+#[derive(Clone)]
 pub struct Dense<AF: ActivationFunc> {
     activity: Matrix2d,
     activation_func: AF,
@@ -17,7 +19,7 @@ pub struct Dense<AF: ActivationFunc> {
 }
 
 impl<AF: ActivationFunc> Dense<AF> {
-    fn new(len: usize, activation_func: AF) -> Result<Dense<AF>, NNetError> {
+    pub fn new(len: usize, activation_func: AF) -> Result<Dense<AF>, NNetError> {
         if len > 0 {
             return Ok(Dense {
                 activity: Matrix2d::new(1, 1),
@@ -30,8 +32,12 @@ impl<AF: ActivationFunc> Dense<AF> {
 }
 
 impl<AF: ActivationFunc> Layer for Dense<AF> {
-    fn set_activity(&mut self, X: &Matrix2d, W: &Matrix2d) -> Result<(), NNetError> {
-        let new_activity = match X.dot(W) {
+    fn set_input(&mut self, x: &Matrix2d) -> () {
+        self.activity = x.clone();
+    }
+    fn set_activity(&mut self, x: &Matrix2d, w: &Matrix2d) -> Result<(), NNetError> {
+        // println!("X: {:?}\n W: {:?}", X, W);
+        let new_activity = match x.dot(w) {
             Some(v) => v,
             None => return Err(NNetError::ActivityError)
         };

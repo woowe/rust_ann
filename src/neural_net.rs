@@ -2,9 +2,10 @@
 use num_rust::Matrix2d;
 
 use layer::Layer;
-use cost_function::CostFunction;
-use trainer::Trainer;
+// use cost_function::CostFunction;
+// use trainer::Trainer;
 
+#[derive(Debug)]
 pub enum NNetError {
     DescSize,
     LayerSize,
@@ -22,48 +23,48 @@ pub enum NNetError {
 pub trait NeuralNet {
     type Net: NeuralNet;
     type L: Layer;
-    type C: CostFunction;
-    type T: Trainer;
+    // type C: CostFunction;
+    // type T: Trainer;
 
-    fn new(&self, desc: Vec<Self::L>, cost: Self::C, trainer: Self::T) -> Result<Self::Net, NNetError>;
+    fn new(desc: Vec<Self::L>) -> Result<Self::Net, NNetError>;
     fn predict(&mut self, input: &Matrix2d) -> Result<Matrix2d, NNetError>;
-    fn fit(&mut self,  input: &Matrix2d, output: &Matrix2d, trainer: &Self::T, cost: &Self::C) -> Result<(), NNetError>;
+    // fn fit(&mut self,  input: &Matrix2d, output: &Matrix2d, trainer: &Self::T, cost: &Self::C) -> Result<(), NNetError>;
 
-    fn get_activities(&self) -> &[Matrix2d];
+    fn set_weights(&mut self, n_weights: Vec<Matrix2d>) -> Result<(), NNetError>;
+    // fn get_activities(&self) -> &[Matrix2d];
     fn get_weights(&self) -> &[Matrix2d];
     fn get_layers(&self) -> &[Self::L];
 }
 
+#[derive(Clone)]
 pub struct Sequential<L: Layer> {
     layers: Vec<L>,
-    weights: Vec<Matrix2d>,
-    activities: Vec<Matrix2d>
+    pub weights: Vec<Matrix2d>
 }
 
-impl<L: Layer> NeuralNet for Sequential<L, CF, T> {
-    type Net = Sequential<L, CF, T>;
+impl<L: Layer> NeuralNet for Sequential<L> {
+    type Net = Sequential<L>;
     type L = L;
-    type C = CF;
-    type T = T;
 
-    fn new(&self, desc: Vec<L>, cost: CF, trainer: T) -> Result<Sequential<L, CF, T>, NNetError> {
+    fn new(desc: Vec<L>) -> Result<Sequential<L>, NNetError> {
         if desc.len() > 2 {
             let desc_len = desc.len();
             let weights = (0..desc_len - 1).map(|idx| {
                 Matrix2d::fill_rng(desc[idx].len(), desc[idx + 1].len())
             }).collect::<Vec<Matrix2d>>();
+            // print!("{:?}", weights);
 
-            let mut activities = Vec::new();
-            unsafe {
-                activities.set_len(desc_len  - 1);
-            }
+            // let mut activities = Vec::new();
+            // unsafe {
+            //     activities.set_len(desc_len  - 1);
+            // }
             return Ok(
                 Sequential {
                     layers: desc,
                     weights: weights,
-                    activities: activities,
-                    cost: cost,
-                    trainer: trainer
+                    // activities: activities,
+                    // cost: cost,
+                    // trainer: trainer
                 }
             )
         }
@@ -76,35 +77,66 @@ impl<L: Layer> NeuralNet for Sequential<L, CF, T> {
         //     None => return Err(NNetError::ActivityError)
         // };
 
-        let _ = try!(self.layers[0].set_activity(&input, &self.weights[0]));
+            // fn feed_forward(&mut self, input: &Matrix2d) -> Matrix2d {
+            //     // compute activity of X ⊗ W(0)
+            //     self.activities[0] = input.dot(&self.weights[0]).expect("Dot product went wrong X*W(0)");
+            //
+            //     for (idx, weight) in self.weights.iter().enumerate().skip(1) {
+            //         // compute the activation of activation( activities(idx - 1) )
+            //         self.activations[idx - 1] = self.activities[idx - 1].apply_fn(sigmoid);
+            //         // compute activity of activation(idx - 1) ⊗ W(idx)
+            //         self.activities[idx] = self.activations[idx - 1].dot(weight).expect(&format!("Dot product went wrong: a({})*W({})", idx - 1, idx));
+            //     }
+            //
+            //     // compute the last activation activation( activities(last) )
+            //     return self.activities.last().unwrap().apply_fn(sigmoid);
+            // }
 
-        for (idx, weight) in self.weights.iter().skip(1).enumerate() {
-            let activation = self.layers[idx - 1].get_activation();
-            let _ = try!(self.layers[idx].set_activity(activation, weight));
+        let _ = self.layers[0].set_input(&input);
+        // println!("{:?}", self.layers[idx].get_activity());
+        for (idx, weight) in self.weights.iter().enumerate() {
+            // println!("{:?}", idx);
+            let prev_activation = self.layers[idx].get_activation();
+            let _ = try!(self.layers[idx + 1].set_activity(&prev_activation, weight));
+            // println!("{:?}", self.layers[idx].get_activity());
+            // println!("{:?}", self.layers[idx].get_activation());
             // match activation.dot(weight) {
             //     Some(v) => { self.activities[idx] = v; },
             //     None => return Err(NNetError::ActivityError)
             // };
         }
 
+        // println!("{:?}", self.layers.last().unwrap().get_activity());
+
         match self.layers.last() {
-            Some(v) => match self.activities.last() {
-                Some(a) => Ok(v.get_activation(&a)),
-                None => Err(NNetError::PredictError)
-            },
+            Some(l) => Ok(l.get_activation()),
             None => Err(NNetError::PredictError)
         }
     }
 
-    fn fit(&mut self,  input: &Matrix2d, output: &Matrix2d, trainer: &T, cost: &CF) -> Result<(), NNetError> {
-        let updated_weights  = try!(trainer.optimize(input, output, cost));
-        self.weights = updated_weights;
+    // fn fit(&mut self,  input: &Matrix2d, output: &Matrix2d, trainer: &T, cost: &CF) -> Result<(), NNetError> {
+    //     let updated_weights  = try!(trainer.optimize(input, output, cost));
+    //     self.weights = updated_weights;
+    //     Ok(())
+    // }
+
+    fn set_weights(&mut self, n_weights: Vec<Matrix2d>) -> Result<(), NNetError> {
+        if self.weights.len() == n_weights.len() {
+            for (w, nw) in n_weights.iter().zip(self.weights.iter()) {
+                if  w.get_rows() != nw.get_rows() &&
+                    w.get_cols() != nw.get_cols() {
+                    return Err(NNetError::GenericError)
+                }
+            }
+        } else {
+            return Err(NNetError::GenericError)
+        }
+        self.weights = n_weights.clone();
         Ok(())
     }
-
-    fn get_activities(&self) -> &[Matrix2d] {
-        &self.activities[..]
-    }
+    // fn get_activities(&self) -> &[Matrix2d] {
+    //     &self.activities[..]
+    // }
 
     fn get_weights(&self) -> &[Matrix2d] {
         &self.weights[..]
@@ -114,11 +146,11 @@ impl<L: Layer> NeuralNet for Sequential<L, CF, T> {
         &self.layers[..]
     }
 
-    fn get_cost(&mut self) -> &Self::C {
-        &self.cost
-    }
-
-    fn get_trainer(&mut self) -> &Self::T {
-        &self.trainer
-    }
+    // fn get_cost(&mut self) -> &Self::C {
+    //     &self.cost
+    // }
+    //
+    // fn get_trainer(&mut self) -> &Self::T {
+    //     &self.trainer
+    // }
 }

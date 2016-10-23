@@ -3,7 +3,8 @@ pub trait ActivationFunc {
     fn activation_fn_prime(&self, x: f64) -> f64;
 }
 
-pub struct Sigmoid {}
+#[derive(Clone)]
+pub struct Sigmoid;
 
 impl ActivationFunc for Sigmoid {
     fn activation_fn(&self, z: f64) -> f64 {
