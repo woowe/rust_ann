@@ -15,3 +15,16 @@ impl ActivationFunc for Sigmoid {
         self.activation_fn(z) * (1. - self.activation_fn(z))
     }
 }
+
+// #[derive(Clone)]
+// pub struct Linear;
+//
+// impl ActivationFunc for Linear {
+//     fn activation_fn(&self, z: f64) -> f64 {
+//         z
+//     }
+//
+//     fn activation_fn_prime(&self, z: f64) -> f64 {
+//         1.0
+//     }
+// }

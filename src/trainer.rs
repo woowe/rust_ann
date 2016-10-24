@@ -30,7 +30,7 @@ impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> MiniBatchSGD<'a, NN, C> {
 
 impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, NN, C> {
     fn optimize(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<(), NNetError> {
-        let mut net_weights = self.net.get_weights().to_vec();
+
         let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
         let shuffled_input = input.shuffle(seed).mini_batch(self.batch_size);
         let shuffled_actual = actual.shuffle(seed).mini_batch(self.batch_size);
@@ -42,6 +42,7 @@ impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, 
         for i in 0..self.epochs {
             for &(ref s_input, ref s_output) in training_data.iter() {
                 djdws = try!(self.cost.cost_prime(self.net, &s_input, &s_output));
+                let mut net_weights = self.net.get_weights().to_vec();
                 let mut djdws_iter = djdws.iter();
                 for weight in net_weights.iter_mut() {
                     // gradient descent
@@ -59,10 +60,10 @@ impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, 
                 let _ = self.net.set_weights(net_weights.clone());
             }
 
-            // if i % 500 == 0 {
-            //     let pred = self.net.predict(&input).unwrap();
-            //     println!("COST at epoch {}: {}", i, self.cost.cost(self.net, actual, &pred).unwrap());
-            // }
+            if i % 500 == 0 {
+                let pred = self.net.predict(&input).unwrap();
+                println!("COST at epoch {}: {}", i, self.cost.cost(self.net, actual, &pred).unwrap());
+            }
 
 
             let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];

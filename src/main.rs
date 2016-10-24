@@ -346,7 +346,7 @@ fn main() {
             _ => ""
         };
 
-        // println!("ACTUAL: {}, PRED: {}, %{} CONFIDENCE", actual_pred, nn_pred, ((max_pred) * 100.0).round());
+        println!("ACTUAL: {}, PRED: {}, %{} CONFIDENCE", actual_pred, nn_pred, ((max_pred) * 100.0).round());
 
         if actual_idx == max_pred_idx {
             num_right += 1.0;

@@ -52,14 +52,15 @@ impl CostFunction for MSE_Reg {
             };
         }
         // let activities = net.get_layers().iter().map(|l| l.get_activity().clone()).collect::<Vec<Matrix2d>>();
-        let activations = net.get_layers().iter().skip(1).map(|l| l.get_activation()).collect::<Vec<Matrix2d>>();
-        let layer_gradients = net.get_layers().iter().map(|l| l.get_gradient()).collect::<Vec<Matrix2d>>();
+        let layer_len = net.get_layers().len();
+        let activations = net.get_layers()[1..layer_len - 1].iter().map(|l| l.get_activation()).collect::<Vec<Matrix2d>>();
+        let layer_gradients = net.get_layers()[1..].iter().map(|l| l.get_gradient()).collect::<Vec<Matrix2d>>();
         let weights = net.get_weights();
         let layer = try_net!(net.get_layers().last(), NNetError::GradientError);
         let delta = try_net!(cost_matrix.mult(&layer.get_gradient()), NNetError::GradientError);
         deltas.push(delta);
-        for n in 0..(net.get_layers().len() - 2) {
-            let idx = (net.get_layers().len() - 2) - n;
+        for n in 0..(layer_len - 2) {
+            let idx = (layer_len - 2) - n;
             let a_t = &activations[idx - 1].transpose();
             let prev_delta = deltas.last().unwrap().clone();
             let l_w = weights[idx].scale(self.lambda);
