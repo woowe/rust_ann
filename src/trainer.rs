@@ -2,12 +2,13 @@ use num_rust::Matrix2d;
 use neural_net::{NeuralNet, NNetError};
 use rand;
 use cost_function::CostFunction;
+use utils::frobenius_norm;
 
 pub trait Trainer {
     fn optimize(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<(), NNetError>;
 }
 
-pub struct MiniBatchSGD<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> {
+pub struct MiniBatchSGD<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> {
     epochs: usize,
     batch_size: usize,
     learn_rate: f64,
@@ -15,11 +16,8 @@ pub struct MiniBatchSGD<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> {
     cost: &'a mut C
 }
 
-impl<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> MiniBatchSGD<'a, NN, C> {
+impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> MiniBatchSGD<'a, NN, C> {
     pub fn new(net: &'a mut NN, cost: &'a mut C, epochs: usize, batch_size: usize, learn_rate: f64) -> Result<MiniBatchSGD<'a, NN, C>, NNetError> {
-        if epochs < 0 || batch_size < 0 {
-            return Err(NNetError::MiniBatchSGDInitError)
-        }
         Ok(MiniBatchSGD {
             epochs: epochs,
             batch_size: batch_size,
@@ -30,7 +28,7 @@ impl<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> MiniBatchSGD<'a, NN, 
     }
 }
 
-impl<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, NN, C> {
+impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, NN, C> {
     fn optimize(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<(), NNetError> {
         let mut net_weights = self.net.get_weights().to_vec();
         let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
@@ -43,7 +41,7 @@ impl<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> Trainer for MiniBatch
 
         for i in 0..self.epochs {
             for &(ref s_input, ref s_output) in training_data.iter() {
-                djdws = try!(self.cost.cost_prime(&mut self.net.clone(), &s_input, &s_output));
+                djdws = try!(self.cost.cost_prime(self.net, &s_input, &s_output));
                 let mut djdws_iter = djdws.iter();
                 for weight in net_weights.iter_mut() {
                     // gradient descent
@@ -58,8 +56,14 @@ impl<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> Trainer for MiniBatch
                     };
                     *weight = tmp_weight;
                 }
-
+                let _ = self.net.set_weights(net_weights.clone());
             }
+
+            // if i % 500 == 0 {
+            //     let pred = self.net.predict(&input).unwrap();
+            //     println!("COST at epoch {}: {}", i, self.cost.cost(self.net, actual, &pred).unwrap());
+            // }
+
 
             let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
             let _ = training_data.iter_mut().map(|&mut (ref mut si,ref mut so)| {
@@ -68,7 +72,7 @@ impl<'a, NN: 'a + NeuralNet + Clone, C: 'a + CostFunction> Trainer for MiniBatch
             });
         }
 
-        self.net.set_weights(djdws);
+
         Ok(())
     }
 }

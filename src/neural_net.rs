@@ -36,7 +36,6 @@ pub trait NeuralNet {
     fn get_layers(&self) -> &[Self::L];
 }
 
-#[derive(Clone)]
 pub struct Sequential<L: Layer> {
     layers: Vec<L>,
     pub weights: Vec<Matrix2d>

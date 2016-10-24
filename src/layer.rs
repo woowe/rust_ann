@@ -11,7 +11,6 @@ pub trait Layer {
     fn set_input(&mut self, x: &Matrix2d) -> ();
 }
 
-#[derive(Clone)]
 pub struct Dense<AF: ActivationFunc> {
     activity: Matrix2d,
     activation_func: AF,

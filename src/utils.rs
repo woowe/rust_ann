@@ -1,5 +1,9 @@
-use matrix_utils::{ToMatrix2d, Matrix2d};
+use num_rust::Matrix2d;
+use num_rust::ext::traits::ToMatrix2d;
 use std::cmp;
+use neural_net::NeuralNet;
+use cost_function::CostFunction;
+use layer::Layer;
 
 pub fn sum_vec(vec: &[f64]) -> f64 {
     let mut mc = vec.clone();
@@ -65,6 +69,87 @@ pub fn vec_bin_op<F>(u: &[f64], v: &[f64], f: F) -> Vec<f64>
     }
 
     out_vec
+}
+
+// fn compute_gradients<C: CostFunction>(cost: C, input: &Matrix2d, output: &Matrix2d) -> Vec<f64> {
+//     let pred = self.feed_forward(input);
+//     let ds = cost.cost_prime(&input, &output);
+//     let mut vec = Vec::new();
+//     for d in ds.iter() {
+//         vec.extend(d.ravel());
+//     }
+//     return vec;
+// }
+
+fn set_params<NN: NeuralNet>(nn: &mut NN, params: Vec<f64>) {
+    let mut w_end = 0;
+    let mut weights = Vec::new();
+
+    for n in 0..nn.get_layers().len() - 1 {
+        let layer_size = &nn.get_layers()[n].len();
+        let next_layer_size = &nn.get_layers()[n+1].len();
+        let w_start = w_end;
+        w_end = w_start + (layer_size * next_layer_size);
+        weights.push(params[w_start..w_end].reshape(*layer_size, *next_layer_size).unwrap());
+    }
+
+    let _ = nn.set_weights(weights);
+}
+
+fn get_params<NN: NeuralNet>(nn: &NN) -> Vec<f64> {
+    let mut params = nn.get_weights()[0].ravel();
+    for w in nn.get_weights().iter().skip(1) {
+        params.extend(w.ravel());
+    }
+    params
+}
+
+fn compute_gradients<NN: NeuralNet, C: CostFunction>(nn: &mut NN, cost: &mut C,input: &Matrix2d, output: &Matrix2d) -> Vec<f64> {
+    let ds = cost.cost_prime(nn, &input, &output).unwrap();
+    let mut vec = Vec::new();
+    for d in ds.iter() {
+        vec.extend(d.ravel());
+    }
+    return vec;
+}
+
+// numeric estimation of DJDW
+fn compute_numerical_gradients<NN: NeuralNet, C: CostFunction>(nn: &mut NN, cost: &mut C, x: &Matrix2d, y: &Matrix2d) -> Vec<f64> {
+    // println!("CNG START");
+    let params_init = get_params(nn).to_matrix_2d().unwrap();
+    let mut num_grad = Matrix2d::new(params_init.get_rows(), 1);
+    // println!("NUM_GRAD: {:?}", num_grad);
+    let mut peturb = Matrix2d::new(params_init.get_rows(), 1);
+
+    let e = 1e-4 as f64;
+
+    for p in 0..params_init.get_rows() {
+        peturb.get_matrix_mut()[p] = e;
+        set_params(nn, params_init.addition(&peturb).unwrap().ravel());
+        let pred1 = nn.predict(x).unwrap();
+        let loss2 = cost.cost(nn, y, &pred1).unwrap();
+        set_params(nn, params_init.subtract(&peturb).unwrap().ravel());
+        let pred2 = nn.predict(x).unwrap();
+        let loss1 = cost.cost(nn, y, &pred2).unwrap();
+
+        num_grad.get_matrix_mut()[p] = (loss2 - loss1) / (2f64 * e);
+
+        peturb.get_matrix_mut()[p] = 0f64;
+    }
+    set_params(nn, params_init.ravel());
+
+    return num_grad.ravel();
+}
+
+pub fn check_gradient<NN: NeuralNet, C: CostFunction>(nn: &mut NN, cost: &mut C, x: &Matrix2d, y: &Matrix2d) -> f64 {
+    let cng = compute_numerical_gradients(nn, cost, x, y).to_matrix_2d().unwrap();
+    // println!("CNG: {:?}", cng);
+    let nn_cg = compute_gradients(nn, cost, x, y).to_matrix_2d().unwrap();
+    // println!("NN_CNG: {:?}", nn_cg);
+
+    // check if I am computing my gradients correctly
+    // ‖ nn_cg - cng ‖ / ‖ nn_cg + cng ‖ < 10e-8
+    return frobenius_norm(&nn_cg.subtract(&cng).unwrap()) / frobenius_norm(&nn_cg.addition(&cng).unwrap());
 }
 
 

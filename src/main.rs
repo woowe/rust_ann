@@ -11,8 +11,8 @@ use num_rust::ext::traits::ToMatrix2d;
 // mod matrix_utils;
 // use matrix_utils::*;
 //
-// mod utils;
-// use utils::*;
+mod utils;
+use utils::*;
 
 mod neural_net;
 use neural_net::{NeuralNet, Sequential};
@@ -306,31 +306,14 @@ fn main() {
 
     let mut cost_func = MSE_Reg::new(0.001);
 
+    println!("ERROR RATE: {}", check_gradient(&mut net, &mut cost_func, &norm_x, &norm_y));
+
     {
-        let mut trainer = print_try!(MiniBatchSGD::new(&mut net, &mut cost_func, 10_000, 15, 0.5));
-        println!("{:?}", trainer.optimize(&norm_x, &norm_y));
+        let mut trainer = print_try!(MiniBatchSGD::new(&mut net, &mut cost_func, 60_000, 15, 0.5));
+        let _ = trainer.optimize(&norm_x, &norm_y);
     }
 
 
-    // let mut nn = ForwardNeuralNet::new(vec![4, 5, 3], 0.0001).unwrap();
-
-    // let cng = compute_numerical_gradients(&mut nn, &norm_x, &norm_y).to_matrix_2d().unwrap();
-    // let nn_cg = nn.compute_gradients(&norm_x, &norm_y).to_matrix_2d().unwrap();
-
-    // check if I am computing my gradients correctly
-    // ‖ nn_cg - cng ‖ / ‖ nn_cg + cng ‖ < 10e-8
-    // let grad_norm = frobenius_norm(&nn_cg.subtract(&cng).unwrap()) / frobenius_norm(&nn_cg.addition(&cng).unwrap());
-    // assert!(grad_norm < 1e-8);
-    // println!("FROBENIUS NORM: {:e}",  grad_norm);
-    // println!("norm < {:e}: {:?}", 10f64.powf(-8f64),  grad_norm < 10f64.powf(-8f64) as f64);
-
-    // println!("ACTUAL INPUT: {:?}", &norm_x);
-    // println!("ACTUAL OUTPUT: {:?}", &norm_y);
-
-
-
-    // nn.train(&norm_x, &norm_y, 15, 0.5, 10000);
-    //
     let pred_test = net.predict(&norm_test_x).unwrap();
 
     let mut num_right = 0.0;
@@ -363,7 +346,7 @@ fn main() {
             _ => ""
         };
 
-        println!("ACTUAL: {}, PRED: {}, %{} CONFIDENCE", actual_pred, nn_pred, ((max_pred) * 100.0).round());
+        // println!("ACTUAL: {}, PRED: {}, %{} CONFIDENCE", actual_pred, nn_pred, ((max_pred) * 100.0).round());
 
         if actual_idx == max_pred_idx {
             num_right += 1.0;

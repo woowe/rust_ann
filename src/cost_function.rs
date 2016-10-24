@@ -41,106 +41,44 @@ impl CostFunction for MSE_Reg {
     fn cost_prime<NN: NeuralNet>(&mut self, net: &mut NN, input: &Matrix2d, actual: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError> {
         let mut deltas = Vec::new();
         let mut djdw = Vec::new();
-        let mut cost_matrix: Matrix2d;
-        // just a compute of the reciprocal of y_hat.get_rows() so I don't recompute in the loop
-        let mut r_yhat: f64;
+        let cost_matrix: Matrix2d;
+        let r_yhat: f64;
         {
             let y_hat = try!(net.predict(input));
             r_yhat = 1.0 / (y_hat.get_rows() as f64);
-            // let z_last = match net.get_layers().last() {
-            //     Some(v) => v.get_activity(),
-            //     None => return Err(NNetError::GradientError)
-            // };
-
-            println!("COST MATRIX");
             cost_matrix = match actual.clone() - y_hat.clone() {
                 Some(v) => -v,
                 None => return Err(NNetError::GradientError)
             };
         }
-
-        // δ(last) = -(y - ŷ) * activation_prime(activities(last))
-        println!("LAST LAYER");
-        let layer = match net.get_layers().last() {
-            Some(v) => v,
-            None => return Err(NNetError::GradientError)
-        };
-        // let activity = match net.get_activities().last() {
-        //     Some(v) => v,
-        //     None => return Err(NNetError::GradientError)
-        // };
-        println!("DELTA");
-        let delta = match cost_matrix.mult(&layer.get_gradient()) {
-            Some(tmp) =>  tmp,
-            None => return Err(NNetError::GradientError)
-        };
+        // let activities = net.get_layers().iter().map(|l| l.get_activity().clone()).collect::<Vec<Matrix2d>>();
+        let activations = net.get_layers().iter().skip(1).map(|l| l.get_activation()).collect::<Vec<Matrix2d>>();
+        let layer_gradients = net.get_layers().iter().map(|l| l.get_gradient()).collect::<Vec<Matrix2d>>();
+        let weights = net.get_weights();
+        let layer = try_net!(net.get_layers().last(), NNetError::GradientError);
+        let delta = try_net!(cost_matrix.mult(&layer.get_gradient()), NNetError::GradientError);
         deltas.push(delta);
-
-        let layer_len = net.get_layers().len();
-
-        for n in 0..(layer_len - 2) {
-            let idx = (layer_len - 2) - n;
-            let a_t = &net.get_layers()[idx - 1].get_activity().transpose();
-            let prev_delta = try_net!(deltas.last(), NNetError::GradientError).clone();
-            let l_w = net.get_weights()[idx].scale(self.lambda);
+        for n in 0..(net.get_layers().len() - 2) {
+            let idx = (net.get_layers().len() - 2) - n;
+            let a_t = &activations[idx - 1].transpose();
+            let prev_delta = deltas.last().unwrap().clone();
+            let l_w = weights[idx].scale(self.lambda);
             // DJDW(idx) = activations(idx - 1).T ⊗ δ(idx - 1) * 1/m + W(idx) * λ
-            println!("LOOP V{}", n);
-            let v = match a_t.dot(&prev_delta) {
-                Some(tmp) => tmp,
-                None => return Err(NNetError::GradientError)
-            };
+            djdw.push(a_t.dot(&prev_delta).expect("Dot product gone wrong a_t * prev_delta").scale(r_yhat)
+                        .addition(&l_w).expect("Addition gone wrong a_t * prev_delta + lambda * W"));
 
-            println!("LOOP DW{}\nV: {:?}\n LW: {:?}", n, v, l_w);
-            let dw = match v.scale(r_yhat).addition(&l_w) {
-                Some(tmp) => tmp,
-                None => return Err(NNetError::GradientError)
-            };
-
-            djdw.push(dw);
-
-            let w_t = &net.get_weights()[idx].transpose();
-            let layer = &net.get_layers()[idx - 1];
-            // let activity = &layer.get_activity();
-            let z_prime = layer.get_gradient();
+            let w_t = &weights[idx].transpose();
+            let z_prime = &layer_gradients[idx - 1];
 
             // δ(idx) = δ(idx - 1) ⊗ W(idx).T * activation_prime(activities(idx - 1))
-            println!("LOOP V2{}", n);
-            let v = match prev_delta.dot(w_t) {
-                Some(tmp) =>  tmp,
-                None => return Err(NNetError::GradientError)
-            };
-
-            println!("LOOP DELTA{}",n);
-            let delta = match v.mult(&z_prime) {
-                Some(tmp) => tmp,
-                None => return Err(NNetError::GradientError)
-            };
-
+            let delta = prev_delta.dot(w_t).expect("Dot product gone wrong prev_delta * w_t").mult(z_prime).expect("Mult gone wrong (prev_delta * w_t) x z_prime");
             deltas.push(delta);
         }
 
         // δ(0) = X.T ⊗ δ(1) * 1/m + W(0) * λ
-        println!("L_D");
-        let l_d = match deltas.last() {
-            Some(tmp) => tmp,
-            None => return Err(NNetError::GradientError)
-        };
-
-        let w = &net.get_weights()[0].scale(self.lambda);
-        println!("AFTER LOOP V");
-        let v = match input.transpose().dot(l_d) {
-            Some(tmp) => tmp,
-            None => return Err(NNetError::GradientError)
-        };
-
-        println!("AFTER LOOP DW");
-        let dw = match v.scale(r_yhat).addition(w) {
-            Some(tmp) => tmp,
-            None => return Err(NNetError::GradientError)
-        };
-
-        djdw.push(dw);
+        djdw.push(input.transpose().dot(&deltas.last().unwrap()).expect("Dot gone wrong X_t * delta_last").scale(r_yhat)
+                    .addition(&weights[0].scale(self.lambda)).expect("Addition gone wrong X_t * delta_last + lambda * W(0)"));
         djdw.reverse();
-        Ok(djdw)
+        return Ok(djdw);
     }
 }
