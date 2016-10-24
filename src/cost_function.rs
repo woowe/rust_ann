@@ -15,7 +15,7 @@ macro_rules! try_net {
 
 pub trait CostFunction {
     fn cost<NN: NeuralNet>(&self, net: &NN, actual: &Matrix2d, pred: &Matrix2d) -> Result<f64, NNetError>;
-    fn cost_prime<NN: NeuralNet>(&mut self, net: &mut NN, input: &Matrix2d, actual: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError>;
+    fn cost_prime<NN: NeuralNet>(&mut self, net: &mut NN, input: &Matrix2d, actual: &Matrix2d, y_hat: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError>;
 }
 
 pub struct MSE_Reg {
@@ -38,26 +38,21 @@ impl CostFunction for MSE_Reg {
         Ok(0.5f64 * sum_vec(&cost.get_matrix()[..]) / (pred.get_rows() as f64) + ( (self.lambda/2.0)* w_sum ))
     }
 
-    fn cost_prime<NN: NeuralNet>(&mut self, net: &mut NN, input: &Matrix2d, actual: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError> {
+    fn cost_prime<NN: NeuralNet>(&mut self, net: &mut NN, input: &Matrix2d, actual: &Matrix2d, y_hat: &Matrix2d) -> Result<Vec<Matrix2d>, NNetError> {
         let mut deltas = Vec::new();
         let mut djdw = Vec::new();
-        let cost_matrix: Matrix2d;
-        let r_yhat: f64;
-        {
-            let y_hat = try!(net.predict(input));
-            r_yhat = 1.0 / (y_hat.get_rows() as f64);
-            cost_matrix = match actual.clone() - y_hat.clone() {
-                Some(v) => -v,
-                None => return Err(NNetError::GradientError)
-            };
-        }
+        let cost_matrix = match actual.clone() - y_hat.clone() {
+            Some(v) => -v,
+            None => return Err(NNetError::GradientError)
+        };
+        let r_yhat = 1.0 / (y_hat.get_rows() as f64);
+
         // let activities = net.get_layers().iter().map(|l| l.get_activity().clone()).collect::<Vec<Matrix2d>>();
         let layer_len = net.get_layers().len();
         let activations = net.get_layers()[1..layer_len - 1].iter().map(|l| l.get_activation()).collect::<Vec<Matrix2d>>();
         let layer_gradients = net.get_layers()[1..].iter().map(|l| l.get_gradient()).collect::<Vec<Matrix2d>>();
         let weights = net.get_weights();
-        let layer = try_net!(net.get_layers().last(), NNetError::GradientError);
-        let delta = try_net!(cost_matrix.mult(&layer.get_gradient()), NNetError::GradientError);
+        let delta = try_net!(cost_matrix.mult(&layer_gradients.last().unwrap()), NNetError::GradientError);
         deltas.push(delta);
         for n in 0..(layer_len - 2) {
             let idx = (layer_len - 2) - n;

@@ -41,7 +41,8 @@ impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, 
 
         for i in 0..self.epochs {
             for &(ref s_input, ref s_output) in training_data.iter() {
-                djdws = try!(self.cost.cost_prime(self.net, &s_input, &s_output));
+                let pred = try!(self.net.predict(input));
+                djdws = try!(self.cost.cost_prime(self.net, &s_input, &s_output, &pred));
                 let mut net_weights = self.net.get_weights().to_vec();
                 let mut djdws_iter = djdws.iter();
                 for weight in net_weights.iter_mut() {

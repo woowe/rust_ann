@@ -57,8 +57,8 @@ impl<L: Layer> NeuralNet for Sequential<L> {
 
     fn predict(&mut self, input: &Matrix2d) -> Result<Matrix2d, NNetError> {
         let _ = self.layers[0].set_input(&input);
-        let _ = try!(self.layers[1].set_activity(input, self.weights[0]));
-        
+        let _ = try!(self.layers[1].set_activity(input, &self.weights[0]));
+
         for (idx, weight) in self.weights.iter().enumerate().skip(1) {
             let mut prev_activation = self.layers[idx].get_activation();
             let _ = try!(self.layers[idx + 1].set_activity(&prev_activation, weight));
