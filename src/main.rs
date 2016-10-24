@@ -296,13 +296,12 @@ fn main() {
     // println!("HELLO");
     let (norm_x, norm_y) = net_data.normalized_train_data();
     let (norm_test_x, norm_test_y) = net_data.normalized_test_data();
-    // let mut topology: Vec<Dense<Sigmoid>> = Vec::new();
+    
     let mut net = print_try!(Sequential::new(vec![
         print_try!(Dense::new(4, Sigmoid)),
         print_try!(Dense::new(5, Sigmoid)),
         print_try!(Dense::new(3, Sigmoid))
     ]));
-    // println!("{:?}", net.predict(&norm_test_x));
 
     let mut cost_func = MSE_Reg::new(0.001);
 
