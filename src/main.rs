@@ -100,6 +100,7 @@ fn main() {
     let (norm_x, norm_y) = net_data.normalized_train_data();
     let (norm_test_x, norm_test_y) = net_data.normalized_test_data();
 
+    // create the neural net!
     let mut net = define_net!(
         Sequential[
             Input(4),
@@ -108,15 +109,21 @@ fn main() {
         ]
     );
 
+    // define the cost function (MSE w/ l2 regularization, planning to lift the regularization out of the cost function implementation)
+    // would look more like MSE::new(Regularization::L2(0.001))
     let mut cost_func = MSE_Reg::new(0.001);
 
-    println!("Calculating Derivaties correct: {}", 10e-8 > check_gradient(&mut net, &mut cost_func, &norm_x, &norm_y));
+    // make sure the gradients are being calculated correct
+    println!("Calculating derivatives correct: {}", 10e-8 > check_gradient(&mut net, &mut cost_func, &norm_x, &norm_y));
 
     {
+        // set up the trainer
         let mut trainer = print_try!(MiniBatchSGD::new(&mut net, &mut cost_func, 200_000, 5, 0.01));
+        // optimize the weights!
         let _ = print_try!(trainer.optimize(&norm_x, &norm_y));
     }
 
+    // now that we have optimized everything get the predictions of the opimized net!
     let pred_test = net.predict(&norm_test_x).unwrap();
 
     let mut num_right = 0.0;
@@ -149,7 +156,7 @@ fn main() {
             _ => ""
         };
 
-        println!("ACTUAL: {}, PRED: {}, %{} CONFIDENCE", actual_pred, nn_pred, ((max_pred) * 100.0).round());
+        println!("ACTUAL: {}, PRED: {}", actual_pred, nn_pred);
 
         if actual_idx == max_pred_idx {
             num_right += 1.0;
