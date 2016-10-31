@@ -100,12 +100,6 @@ fn main() {
     let (norm_x, norm_y) = net_data.normalized_train_data();
     let (norm_test_x, norm_test_y) = net_data.normalized_test_data();
 
-    // let mut net = Sequential::new(vec![
-    //     Box::new(Input::new(4).unwrap()),
-    //     Box::new(Dense::new(5, Sigmoid).unwrap()),
-    //     Box::new(Dense::new(3, Sigmoid).unwrap())
-    // ]).unwrap();
-
     let mut net = define_net!(
         Sequential[
             Input(4),
