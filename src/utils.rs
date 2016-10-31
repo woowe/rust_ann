@@ -105,7 +105,8 @@ fn get_params<NN: NeuralNet>(nn: &NN) -> Vec<f64> {
 }
 
 fn compute_gradients<NN: NeuralNet, C: CostFunction>(nn: &mut NN, cost: &mut C,input: &Matrix2d, output: &Matrix2d) -> Vec<f64> {
-    let ds = cost.cost_prime(nn, &input, &output).unwrap();
+    let pred = nn.predict(input).unwrap();
+    let ds = cost.cost_prime(nn, &input, &output, &pred).unwrap();
     let mut vec = Vec::new();
     for d in ds.iter() {
         vec.extend(d.ravel());

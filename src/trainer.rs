@@ -41,8 +41,9 @@ impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, 
 
         for i in 0..self.epochs {
             for &(ref s_input, ref s_output) in training_data.iter() {
-                let pred = try!(self.net.predict(input));
+                let pred = try!(self.net.predict(s_input));
                 djdws = try!(self.cost.cost_prime(self.net, &s_input, &s_output, &pred));
+                // println!("Optimizing... {}", self.epochs);
                 let mut net_weights = self.net.get_weights().to_vec();
                 let mut djdws_iter = djdws.iter();
                 for weight in net_weights.iter_mut() {
@@ -63,15 +64,22 @@ impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, 
 
             if i % 500 == 0 {
                 let pred = self.net.predict(&input).unwrap();
-                println!("COST at epoch {}: {}", i, self.cost.cost(self.net, actual, &pred).unwrap());
+                // let djdws = try!(self.cost.cost_prime(self.net, &s_input, &s_output, &pred));
+                println!("{}", self.cost.cost(self.net, actual, &pred).unwrap());
+                // println!("ADDED GRADIENTS: {:?}", try!(self.cost.cost_prime(self.net, &s_input, &s_output, &pred)));
+                // println!("EPOCH {}", i);
             }
 
 
-            let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
-            let _ = training_data.iter_mut().map(|&mut (ref mut si,ref mut so)| {
-                *si = si.shuffle(seed);
-                *so = so.shuffle(seed);
-            });
+            // let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
+            // let _ = training_data.iter_mut().map(|&mut (ref mut si,ref mut so)| {
+            //     *si = si.shuffle(seed);
+            //     *so = so.shuffle(seed);
+            // });
+            let shuffled_input = input.shuffle(seed).mini_batch(self.batch_size);
+            let shuffled_actual = actual.shuffle(seed).mini_batch(self.batch_size);
+
+            training_data = shuffled_input.iter().map(|el| el.clone()).zip(shuffled_actual).collect::<Vec<(Matrix2d,Matrix2d)>>();
         }
 
 

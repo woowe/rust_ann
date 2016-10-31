@@ -32,7 +32,7 @@ impl MSE_Reg {
 
 impl CostFunction for MSE_Reg {
     fn cost<NN: NeuralNet>(&self, net: &NN, actual: &Matrix2d, pred: &Matrix2d) -> Result<f64, NNetError> {
-        let cost =  try_net!( (*actual).clone() - (*pred).clone(), NNetError::CostError );
+        let cost =  try_net!( (*actual).clone() - (*pred).clone(), NNetError::CostError ).apply_fn(|x| x * x);
 
         let w_sum = net.get_weights().iter().fold(0f64, |acc, w| acc + sum_vec(&w.apply_fn(|x| x*x).get_matrix()[..]) );
         Ok(0.5f64 * sum_vec(&cost.get_matrix()[..]) / (pred.get_rows() as f64) + ( (self.lambda/2.0)* w_sum ))

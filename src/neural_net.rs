@@ -18,28 +18,49 @@ pub enum NNetError {
     GenericError
 }
 
+macro_rules! print_try {
+    ($expr:expr) => (match $expr {
+        Ok(val) => val,
+        Err(err) => {
+            print!("{:?}", err);
+            panic!();
+        }
+    })
+}
+
+macro_rules! define_net {
+    ($net:ident[ $ilayer:ident($insize:expr), $($layer:ident($size:expr, $activ:ident)),+]) => {
+        print_try!($net::new(vec![
+            Box::new(print_try!($ilayer::new($insize))),
+            $(
+                Box::new(print_try!($layer::new($size, $activ))),
+            )+
+        ]))
+    };
+}
+
 pub trait NeuralNet {
     type Net: NeuralNet;
-    type L: Layer;
+    // type L: Layer;
 
-    fn new(desc: Vec<Self::L>) -> Result<Self::Net, NNetError>;
+    fn new(desc: Vec<Box<Layer>>) -> Result<Self::Net, NNetError>;
     fn predict(&mut self, input: &Matrix2d) -> Result<Matrix2d, NNetError>;
 
     fn set_weights(&mut self, n_weights: Vec<Matrix2d>) -> Result<(), NNetError>;
     fn get_weights(&self) -> &[Matrix2d];
-    fn get_layers(&self) -> &[Self::L];
+    fn get_layers(&self) -> &[Box<Layer>];
 }
 
-pub struct Sequential<L: Layer> {
-    layers: Vec<L>,
+pub struct Sequential {
+    layers: Vec<Box<Layer>>,
     pub weights: Vec<Matrix2d>
 }
 
-impl<L: Layer> NeuralNet for Sequential<L> {
-    type Net = Sequential<L>;
-    type L = L;
+impl NeuralNet for Sequential {
+    type Net = Sequential;
+    // type L = L;
 
-    fn new(desc: Vec<L>) -> Result<Sequential<L>, NNetError> {
+    fn new(desc: Vec<Box<Layer>>) -> Result<Sequential, NNetError> {
         if desc.len() > 2 {
             let desc_len = desc.len();
             let weights = (0..desc_len - 1).map(|idx| {
@@ -89,7 +110,7 @@ impl<L: Layer> NeuralNet for Sequential<L> {
         &self.weights[..]
     }
 
-    fn get_layers(&self) -> &[Self::L] {
+    fn get_layers(&self) -> &[Box<Layer>] {
         &self.layers[..]
     }
 }

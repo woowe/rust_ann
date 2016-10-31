@@ -14,11 +14,12 @@ use num_rust::ext::traits::ToMatrix2d;
 mod utils;
 use utils::*;
 
+#[macro_use]
 mod neural_net;
 use neural_net::{NeuralNet, Sequential};
 
 mod layer;
-use layer::Dense;
+use layer::{Input, Dense};
 
 mod cost_function;
 use cost_function::MSE_Reg;
@@ -79,204 +80,6 @@ impl NetData {
     }
 }
 
-// struct ForwardNeuralNet {
-//     topology: Vec<usize>, // description of the net
-//     weights: Vec<Matrix2d>, // weights
-//     // deltaWeights: Vec<Matrix2d>, // gradient of weights
-//     activities: Vec<Matrix2d>, // the activity of the neurons: sum(W_i * x_i) where x is the inputs to the neuron
-//     activations: Vec<Matrix2d>, // the activation of the neurons: activation(sum(W_i * x_i))
-//     lambda: f64 // the regularization rate
-// }
-//
-// impl ForwardNeuralNet {
-//     fn new(topology: Vec<usize>, lambda: f64) -> Option<ForwardNeuralNet> {
-//         if topology.len() > 2 {
-//             return Some(ForwardNeuralNet {
-//                 topology: topology.clone(),
-//                 // init weights with random values
-//                 weights: (0..topology.len() - 1).map(|idx| {
-//                     Matrix2d::fill_rng(topology[idx], topology[idx + 1])
-//                 }).collect::<Vec<Matrix2d>>(),
-//                 // // init gradient of weights with zeros
-//                 // deltaWeights: (0..topology.len() - 1).map(|idx| {
-//                 //     Matrix2d::new(topology[idx], topology[idx + 1])
-//                 // }).collect::<Vec<Matrix2d>>(),
-//                 activities: (0..topology.len() - 1).map(|_| {
-//                     Matrix2d::new(1, 1)
-//                 }).collect::<Vec<Matrix2d>>(),
-//                 activations: (0..topology.len() - 2).map(|_| {
-//                     Matrix2d::new(1, 1)
-//                 }).collect::<Vec<Matrix2d>>(),
-//                 lambda: lambda
-//             })
-//         }
-//         None
-//     }
-//     fn feed_forward(&mut self, input: &Matrix2d) -> Matrix2d {
-//         // compute activity of X ⊗ W(0)
-//         self.activities[0] = input.dot(&self.weights[0]).expect("Dot product went wrong X*W(0)");
-//
-//         for (idx, weight) in self.weights.iter().enumerate().skip(1) {
-//             // compute the activation of activation( activities(idx - 1) )
-//             self.activations[idx - 1] = self.activities[idx - 1].apply_fn(sigmoid);
-//             // compute activity of activation(idx - 1) ⊗ W(idx)
-//             self.activities[idx] = self.activations[idx - 1].dot(weight).expect(&format!("Dot product went wrong: a({})*W({})", idx - 1, idx));
-//         }
-//
-//         // compute the last activation activation( activities(last) )
-//         return self.activities.last().unwrap().apply_fn(sigmoid);
-//     }
-//
-//     fn cost_function(&mut self, output: &Matrix2d, pred: &Matrix2d) -> f64 {
-//         let y_hat = pred;
-//         let cost = ((*output).clone() - (*y_hat).clone()).expect("Subtract went wrong (Y - yhat)").apply_fn(|x| x * x);
-//         let w_sum = self.weights.iter().fold(0f64, |acc, w| acc + sum_vec(&w.apply_fn(|x| x*x).get_matrix()[..]) );
-//         // J = 1/(2m) ∑(y - ŷ)^2 + λ/2 * ∑(W(i))
-//         return 0.5f64 * sum_vec(&cost.get_matrix()[..]) / (pred.get_rows() as f64) + ( (self.lambda/2.0)* w_sum );
-//     }
-//
-//     fn cost_function_prime(&mut self, input: &Matrix2d, output: &Matrix2d, pred: &Matrix2d) -> Vec<Matrix2d> {
-//         let mut deltas = Vec::new();
-//         let mut djdw = Vec::new();
-//
-//         let y_hat = pred;
-//         let z_last = &self.activities.last().unwrap();
-//         let cost_matrix = -((*output).clone() - (*y_hat).clone()).expect("Subtract gone wrong (Y - yhat)");
-//         // δ(last) = -(y - ŷ) * activation_prime(activities(last))
-//         deltas.push(cost_matrix.mult(&z_last.apply_fn(sigmoid_prime)).expect("Mult gone wrong cost_matrix x sigmoid(z_last)"));
-//
-//         // just a compute of the reciprocal of y_hat.get_rows() so I don't recompute in the loop
-//         let r_yhat: f64 = 1.0 / (y_hat.get_rows() as f64);
-//
-//         for n in 0..(self.topology.len() - 2) {
-//             let idx = (self.topology.len() - 2) - n;
-//             let a_t = &self.activations[idx - 1].transpose();
-//             let prev_delta = deltas.last().unwrap().clone();
-//             let l_w = self.weights[idx].scale(self.lambda);
-//             // DJDW(idx) = activations(idx - 1).T ⊗ δ(idx - 1) * 1/m + W(idx) * λ
-//             djdw.push(a_t.dot(&prev_delta).expect("Dot product gone wrong a_t * prev_delta").scale(r_yhat)
-//                         .addition(&l_w).expect("Addition gone wrong a_t * prev_delta + lambda * W"));
-//
-//             let w_t = &self.weights[idx].transpose();
-//             let z_prime = &self.activities[idx - 1].apply_fn(sigmoid_prime);
-//
-//             // δ(idx) = δ(idx - 1) ⊗ W(idx).T * activation_prime(activities(idx - 1))
-//             let delta = prev_delta.dot(w_t).expect("Dot product gone wrong prev_delta * w_t").mult(z_prime).expect("Mult gone wrong (prev_delta * w_t) x z_prime");
-//             deltas.push(delta);
-//         }
-//
-//         // δ(0) = X.T ⊗ δ(1) * 1/m + W(0) * λ
-//         djdw.push(input.transpose().dot(&deltas.last().unwrap()).expect("Dot gone wrong X_t * delta_last").scale(r_yhat)
-//                     .addition(&self.weights[0].scale(self.lambda)).expect("Addition gone wrong X_t * delta_last + lambda * W(0)"));
-//         djdw.reverse();
-//         return djdw;
-//     }
-//
-//     fn get_params(&self) -> Vec<f64> {
-//         let mut params = self.weights[0].ravel();
-//         for w in self.weights.iter().skip(1) {
-//             params.extend(w.ravel());
-//         }
-//         params
-//     }
-//
-//     fn set_params(&mut self, params: Vec<f64>) {
-//         let mut w_end = 0;
-//         self.weights = Vec::new();
-//
-//         for n in 0..self.topology.len() - 1 {
-//             let layer_size = &self.topology[n];
-//             let next_layer_size = &self.topology[n+1];
-//             let w_start = w_end;
-//             w_end = w_start + (layer_size * next_layer_size);
-//             self.weights.push(params[w_start..w_end].reshape(*layer_size, *next_layer_size).unwrap());
-//         }
-//     }
-//
-//     fn compute_gradients(&mut self, input: &Matrix2d, output: &Matrix2d) -> Vec<f64> {
-//         let pred = self.feed_forward(input);
-//         let ds = self.cost_function_prime(&input, &output, &pred);
-//         let mut vec = Vec::new();
-//         for d in ds.iter() {
-//             vec.extend(d.ravel());
-//         }
-//         return vec;
-//     }
-//
-//     fn train(&mut self, input: &Matrix2d, output: &Matrix2d, batch_size: usize, alpha: f64, max_iters: usize) -> () {
-//         let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
-//         let shuffled_input = input.shuffle(seed).mini_batch(batch_size);
-//         let shuffled_output = output.shuffle(seed).mini_batch(batch_size);
-//
-//         let mut training_data = shuffled_input.iter().map(|el| el.clone()).zip(shuffled_output).collect::<Vec<(Matrix2d,Matrix2d)>>();
-//
-//         for i in 0..max_iters {
-//             for &(ref s_input, ref s_output) in training_data.iter() {
-//                 let pred = self.feed_forward(&s_input);
-//                 let djdws = self.cost_function_prime(&s_input, &s_output, &pred);
-//                 let mut djdws_iter = djdws.iter();
-//                 for weight in self.weights.iter_mut() {
-//                     let djdw = (*djdws_iter.next().unwrap()).scale(alpha);
-//                     let tmp_weight = ((*weight).clone() - djdw).unwrap();
-//                     // gradient descent
-//                     // W(i) = W(i) - alhpa * DJDW
-//                     *weight = tmp_weight;
-//                 }
-//             }
-//             let seed: &[_] = &[rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>(), rand::random::<usize>()];
-//             let _ = training_data.iter_mut().map(|&mut (ref mut si,ref mut so)| {
-//                 *si = si.shuffle(seed);
-//                 *so = so.shuffle(seed);
-//             });
-//         }
-//     }
-// }
-//
-// // numeric estimation of DJDW
-// fn compute_numerical_gradients(nn: &mut ForwardNeuralNet, x: &Matrix2d, y: &Matrix2d) -> Vec<f64> {
-//     let params_init = nn.get_params().to_matrix_2d().unwrap();
-//     let mut num_grad = Matrix2d::new(params_init.get_rows(), 1);
-//     let mut peturb = Matrix2d::new(params_init.get_rows(), 1);
-//
-//     let e = 1e-4 as f64;
-//
-//     for p in 0..params_init.get_rows() {
-//         peturb.get_matrix_mut()[p] = e;
-//         nn.set_params(params_init.addition(&peturb).unwrap().ravel());
-//         let pred1 = nn.feed_forward(x);
-//         let loss2 = nn.cost_function(y, &pred1);
-//         nn.set_params(params_init.subtract(&peturb).unwrap().ravel());
-//         let pred2 = nn.feed_forward(x);
-//         let loss1 = nn.cost_function(y, &pred2);
-//
-//         num_grad.get_matrix_mut()[p] = (loss2 - loss1) / (2f64 * e);
-//
-//         peturb.get_matrix_mut()[p] = 0f64;
-//     }
-//     nn.set_params(params_init.ravel());
-//
-//     return num_grad.ravel();
-// }
-//
-// fn sigmoid(z: f64) -> f64 {
-//     1f64 / (1f64 + (-z).exp())
-// }
-//
-// fn sigmoid_prime(z: f64) -> f64 {
-//     sigmoid(z) * (1. - sigmoid(z))
-//     // (-z).exp() / ( (1f64 + (-z).exp()).powf(2f64) )
-// }
-
-macro_rules! print_try {
-    ($expr:expr) => (match $expr {
-        Ok(val) => val,
-        Err(err) => {
-            print!("{:?}", err);
-            panic!();
-        }
-    })
-}
-
 fn main() {
     let net_data = NetData::read_csv_file("./data_sets/iris.txt",
                         |line| {
@@ -293,25 +96,32 @@ fn main() {
                         }, |idx| {
                             idx % 2 == 0
                         }).unwrap();
-    // println!("HELLO");
+
     let (norm_x, norm_y) = net_data.normalized_train_data();
     let (norm_test_x, norm_test_y) = net_data.normalized_test_data();
-    
-    let mut net = print_try!(Sequential::new(vec![
-        print_try!(Dense::new(4, Sigmoid)),
-        print_try!(Dense::new(5, Sigmoid)),
-        print_try!(Dense::new(3, Sigmoid))
-    ]));
+
+    // let mut net = Sequential::new(vec![
+    //     Box::new(Input::new(4).unwrap()),
+    //     Box::new(Dense::new(5, Sigmoid).unwrap()),
+    //     Box::new(Dense::new(3, Sigmoid).unwrap())
+    // ]).unwrap();
+
+    let mut net = define_net!(
+        Sequential[
+            Input(4),
+            Dense(5, Sigmoid),
+            Dense(3, Sigmoid)
+        ]
+    );
 
     let mut cost_func = MSE_Reg::new(0.001);
 
-    println!("ERROR RATE: {}", check_gradient(&mut net, &mut cost_func, &norm_x, &norm_y));
+    println!("Calculating Derivaties correct: {}", 10e-8 > check_gradient(&mut net, &mut cost_func, &norm_x, &norm_y));
 
     {
-        let mut trainer = print_try!(MiniBatchSGD::new(&mut net, &mut cost_func, 60_000, 15, 0.5));
-        let _ = trainer.optimize(&norm_x, &norm_y);
+        let mut trainer = print_try!(MiniBatchSGD::new(&mut net, &mut cost_func, 200_000, 5, 0.01));
+        let _ = print_try!(trainer.optimize(&norm_x, &norm_y));
     }
-
 
     let pred_test = net.predict(&norm_test_x).unwrap();
 
