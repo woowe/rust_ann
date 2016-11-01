@@ -51,7 +51,7 @@ impl<AF: ActivationFunc> Layer for Dense<AF> {
     }
 
     fn get_activation(&self) -> Matrix2d {
-        self.activity.apply_fn(|z| { self.activation_func.activation_fn(z) })
+        self.activity.par_apply_fn(|z| { self.activation_func.activation_fn(z) })
     }
 
     fn len(&self) -> usize {
@@ -59,7 +59,7 @@ impl<AF: ActivationFunc> Layer for Dense<AF> {
     }
 
     fn get_gradient(&self) -> Matrix2d {
-        self.activity.apply_fn(|z| { self.activation_func.activation_fn_prime(z) })
+        self.activity.par_apply_fn(|z| { self.activation_func.activation_fn_prime(z) })
     }
 }
 
@@ -102,7 +102,7 @@ impl Layer for Input {
     }
 
     fn get_activation(&self) -> Matrix2d {
-        self.activity.apply_fn(|z| { self.activation_func.activation_fn(z) })
+        self.activity.par_apply_fn(|z| { self.activation_func.activation_fn(z) })
     }
 
     fn len(&self) -> usize {
@@ -110,6 +110,6 @@ impl Layer for Input {
     }
 
     fn get_gradient(&self) -> Matrix2d {
-        self.activity.apply_fn(|z| { self.activation_func.activation_fn_prime(z) })
+        self.activity.par_apply_fn(|z| { self.activation_func.activation_fn_prime(z) })
     }
 }

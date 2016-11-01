@@ -58,6 +58,7 @@ impl CostFunction for MSE_Reg {
             let idx = (layer_len - 2) - n;
             let a_t = &activations[idx - 1].transpose();
             let prev_delta = deltas.last().unwrap().clone();
+            // TODO: change when generalizing regularization
             let l_w = weights[idx].scale(self.lambda);
             // DJDW(idx) = activations(idx - 1).T ⊗ δ(idx - 1) * 1/m + W(idx) * λ
             djdw.push(a_t.dot(&prev_delta).expect("Dot product gone wrong a_t * prev_delta").scale(r_yhat)
@@ -72,8 +73,10 @@ impl CostFunction for MSE_Reg {
         }
 
         // δ(0) = X.T ⊗ δ(1) * 1/m + W(0) * λ
+        // TODO: change when generalizing regularization
+        let w0 = &(weights[0].scale(self.lambda));
         djdw.push(input.transpose().dot(&deltas.last().unwrap()).expect("Dot gone wrong X_t * delta_last").scale(r_yhat)
-                    .addition(&weights[0].scale(self.lambda)).expect("Addition gone wrong X_t * delta_last + lambda * W(0)"));
+                    .addition(&w0).expect("Addition gone wrong X_t * delta_last + lambda * W(0)"));
         djdw.reverse();
         return Ok(djdw);
     }

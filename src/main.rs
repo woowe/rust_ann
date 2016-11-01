@@ -113,7 +113,7 @@ fn main() {
     // would look more like MSE::new(Regularization::L2(0.001))
     let mut cost_func = MSE_Reg::new(0.001);
 
-    // make sure the gradients are being calculated correct
+    // // make sure the gradients are being calculated correct
     println!("Calculating derivatives correct: {}", 10e-8 > check_gradient(&mut net, &mut cost_func, &norm_x, &norm_y));
 
     {
