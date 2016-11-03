@@ -25,7 +25,7 @@ mod cost_function;
 use cost_function::MSE_Reg;
 
 mod activation_function;
-use activation_function::Sigmoid;
+use activation_function::*;
 
 mod trainer;
 use trainer::{Trainer, MiniBatchSGD};
@@ -114,7 +114,8 @@ fn main() {
     let mut cost_func = MSE_Reg::new(0.001);
 
     // // make sure the gradients are being calculated correct
-    println!("Calculating derivatives correct: {}", 10e-8 > check_gradient(&mut net, &mut cost_func, &norm_x, &norm_y));
+    let grad = check_gradient(&mut net, &mut cost_func, &norm_x, &norm_y);
+    println!("Calculating derivatives correct: {}, {:e}", 10e-8 > grad, grad);
 
     {
         // set up the trainer
