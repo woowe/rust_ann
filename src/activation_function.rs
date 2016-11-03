@@ -1,4 +1,5 @@
 use utils::sum_vec;
+use num_rust::Matrix2d;
 
 trait FastExp {
     fn fast_exp(&self) -> f64;
@@ -12,104 +13,113 @@ impl FastExp for f64 {
 }
 
 pub trait ActivationFunc {
-    fn activation_fn(&self, x: f64) -> f64;
-    fn activation_fn_prime(&self, x: f64) -> f64;
+    fn activation(&self, z: &Matrix2d) -> Matrix2d;
+    fn activation_prime(&self, z: &Matrix2d) -> Matrix2d;
 }
 
-#[derive(Clone)]
 pub struct Sigmoid;
 
 impl ActivationFunc for Sigmoid {
-    fn activation_fn(&self, z: f64) -> f64 {
-        // 1. / (1. + (-z).exp())
+    fn activation(&self, z: &Matrix2d) -> Matrix2d {
+        // let activ_fn = |z: f64| { 1. / (1. + (-z).exp()) };
         // fast version
-        1. / (1. + (-z).fast_exp())
+        let activ_fn = |z: f64| { 1. / (1. + (-z).fast_exp()) };
+        z.apply_fn(activ_fn)
     }
 
-    fn activation_fn_prime(&self, z: f64) -> f64 {
-        self.activation_fn(z) * (1. - self.activation_fn(z))
+    fn activation_prime(&self, z: &Matrix2d) -> Matrix2d {
+        let activ_fn = |z: f64| { 1. / (1. + (-z).exp()) };
+        let activ_fn_prime = |z: f64| { activ_fn(z) * (1. - activ_fn(z)) };
+        z.apply_fn(activ_fn_prime)
     }
 }
 
-#[derive(Clone)]
 pub struct Identity;
 
 impl ActivationFunc for Identity {
-    fn activation_fn(&self, z: f64) -> f64 {
-        z
+    fn activation(&self, z: &Matrix2d) -> Matrix2d {
+        z.clone()
     }
 
-    fn activation_fn_prime(&self, z: f64) -> f64 {
-        1.
+    fn activation_prime(&self, z: &Matrix2d) -> Matrix2d {
+        let activ_fn_prime = |z: f64| { 1. };
+        z.apply_fn(activ_fn_prime)
     }
 }
 
-#[derive(Clone)]
 pub struct TanH;
 
 impl ActivationFunc for TanH {
-    fn activation_fn(&self, z: f64) -> f64 {
-        2. / (1. + (-2. * z).exp()) - 1.
+    fn activation(&self, z: &Matrix2d) -> Matrix2d {
+        let activ_fn = |z: f64| { 2. / (1. + (-2. * z).exp()) - 1. };
+        z.apply_fn(activ_fn)
     }
 
-    fn activation_fn_prime(&self, z: f64) -> f64 {
-        1. - self.activation_fn(z) * self.activation_fn(z)
+    fn activation_prime(&self, z: &Matrix2d) -> Matrix2d {
+        let activ_fn = |z: f64| { 2. / (1. + (-2. * z).exp()) - 1. };
+        let activ_fn_prime = |z: f64| { 1. - activ_fn(z) * activ_fn(z) };
+        z.apply_fn(activ_fn_prime)
     }
 }
 
-#[derive(Clone)]
 pub struct ReLU;
 
 impl ActivationFunc for ReLU {
-    fn activation_fn(&self, z: f64) -> f64 {
-        if z < 0. {
+    fn activation(&self, z: &Matrix2d) -> Matrix2d {
+        let activ_fn = |z: f64| { if z < 0. {
             0.
         } else {
             z
-        }
+        } };
+        z.apply_fn(activ_fn)
     }
 
-    fn activation_fn_prime(&self, z: f64) -> f64 {
-        if z < 0. {
+    fn activation_prime(&self, z: &Matrix2d) -> Matrix2d {
+        let activ_fn_prime = |z: f64| { if z < 0. {
             0.
         } else {
             1.
-        }
+        } };
+        z.apply_fn(activ_fn_prime)
     }
 }
 
-#[derive(Clone)]
 pub struct SoftPlus;
 
 impl ActivationFunc for SoftPlus {
-    fn activation_fn(&self, z: f64) -> f64 {
-        (1. + z.exp()).ln()
+    fn activation(&self, z: &Matrix2d) -> Matrix2d {
+        let activ_fn = |z: f64| { (1. + z.exp()).ln() };
+        z.apply_fn(activ_fn)
     }
 
-    fn activation_fn_prime(&self, z: f64) -> f64 {
-        1. / (1. + (-z).exp())
+    fn activation_prime(&self, z: &Matrix2d) -> Matrix2d {
+        let activ_fn_prime = |z: f64| { 1. / (1. + (-z).exp()) };
+        z.apply_fn(activ_fn_prime)
     }
 }
 
-// #[derive(Clone)]
-// pub struct SoftMax<'a> {
-//     activites: &'a Matrix2d
-// }
-//
-// impl SoftMax<'a> {
-//     new(activites: &'a Matrix2d) -> SoftMax<'a> {
-//         SoftMax {
-//             activites: activites
-//         }
-//     }
-// }
-//
-// impl ActivationFunc for SoftMax {
-//     fn activation_fn(&self, z: f64) -> f64 {
-//         z.exp() / sum_vec(self.activites.apply_fn(|x| x.exp()).ravel())
-//     }
-//
-//     fn activation_fn_prime(&self, z: f64) -> f64 {
-//         1. / (1. + (-z).exp())
-//     }
-// }
+pub struct SoftMax;
+
+impl ActivationFunc for SoftMax {
+    fn activation(&self, z: &Matrix2d) -> Matrix2d {
+        let m_exp = z.apply_fn(|x| x.exp());
+        let sum_exp = sum_vec( &m_exp.ravel() );
+        let activ_fn = |el: f64| {
+            el / sum_exp
+        };
+        m_exp.apply_fn(activ_fn)
+    }
+
+    fn activation_prime(&self, z: &Matrix2d) -> Matrix2d {
+        // 1. / (1. + (-z).exp())
+        let m_exp = z.apply_fn(|x| x.exp());
+        let sum_exp = sum_vec( &m_exp.ravel() );
+        let activ_fn = |el: f64| {
+            el / sum_exp
+        };
+        let activ_fn_prime = |el: f64| {
+            activ_fn(el) * (1 - activ_fn(el))
+        };
+        z.apply_fn(activ_fn_prime)
+    }
+}
