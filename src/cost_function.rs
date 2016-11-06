@@ -2,7 +2,6 @@ use num_rust::Matrix2d;
 use num_rust::utils::sum_vec;
 
 use neural_net::{NeuralNet, NNetError};
-use layer::Layer;
 
 macro_rules! try_net {
     ( $expr : expr, $err:expr ) => (
@@ -32,9 +31,10 @@ impl MSE_Reg {
 
 impl CostFunction for MSE_Reg {
     fn cost<NN: NeuralNet>(&self, net: &NN, actual: &Matrix2d, pred: &Matrix2d) -> Result<f64, NNetError> {
+        // println!("PRED: {:?}", pred);
         let cost =  try_net!( (*actual).clone() - (*pred).clone(), NNetError::CostError ).apply_fn(|x| x * x);
-
         let w_sum = net.get_weights().iter().fold(0f64, |acc, w| acc + sum_vec(&w.apply_fn(|x| x*x).get_matrix()[..]) );
+        // println!("COST: {:?}\nW_SUM: {:?}", sum_vec(&cost.get_matrix()[..]), w_sum);
         Ok(0.5f64 * sum_vec(&cost.get_matrix()[..]) / (pred.get_rows() as f64) + ( (self.lambda/2.0)* w_sum ))
     }
 
@@ -49,8 +49,8 @@ impl CostFunction for MSE_Reg {
 
         // let activities = net.get_layers().iter().map(|l| l.get_activity().clone()).collect::<Vec<Matrix2d>>();
         let layer_len = net.get_layers().len();
-        let activations = net.get_layers()[1..layer_len - 1].iter().map(|l| l.get_activation()).collect::<Vec<Matrix2d>>();
-        let layer_gradients = net.get_layers()[1..].iter().map(|l| l.get_gradient()).collect::<Vec<Matrix2d>>();
+        let activations: Vec<Matrix2d> = net.get_layers()[1..layer_len - 1].iter().map(|l| l.get_activation()).collect();
+        let layer_gradients: Vec<Matrix2d> = net.get_layers()[1..].iter().map(|l| l.get_gradient()).collect();
         let weights = net.get_weights();
         let delta = try_net!(cost_matrix.mult(&layer_gradients.last().unwrap()), NNetError::GradientError);
         deltas.push(delta);

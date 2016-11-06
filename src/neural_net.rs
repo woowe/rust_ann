@@ -8,12 +8,12 @@ pub enum NNetError {
     DescSize,
     LayerSize,
     ActivityError,
-    ActivationError,
+    // ActivationError,
     CostError,
     PredictError,
-    FitError,
+    // FitError,
     OptimizeError,
-    MiniBatchSGDInitError,
+    // MiniBatchSGDInitError,
     GradientError,
     GenericError
 }
@@ -78,11 +78,15 @@ impl NeuralNet for Sequential {
 
     fn predict(&mut self, input: &Matrix2d) -> Result<Matrix2d, NNetError> {
         let _ = self.layers[0].set_input(&input);
+        // println!("LAYER(0) activity: {:?}", self.layers[0].get_activity());
         let _ = try!(self.layers[1].set_activity(input, &self.weights[0]));
+        // println!("LAYER(0) activity: {:?}", self.layers[1].get_activity());
 
         for (idx, weight) in self.weights.iter().enumerate().skip(1) {
-            let mut prev_activation = self.layers[idx].get_activation();
+            // println!("LAYER({}) activation: {:?}", idx, self.layers[1].get_activation());
+            let prev_activation = self.layers[idx].get_activation();
             let _ = try!(self.layers[idx + 1].set_activity(&prev_activation, weight));
+            // println!("LAYER({}) activity: {:?}", idx + 1, self.layers[1].get_activity());
         }
 
         match self.layers.last() {

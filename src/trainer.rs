@@ -2,7 +2,7 @@ use num_rust::Matrix2d;
 use neural_net::{NeuralNet, NNetError};
 use rand;
 use cost_function::CostFunction;
-use utils::frobenius_norm;
+// use utils::frobenius_norm;
 
 pub trait Trainer {
     fn optimize(&mut self, input: &Matrix2d, actual: &Matrix2d) -> Result<(), NNetError>;
@@ -43,14 +43,17 @@ impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, 
             for &(ref s_input, ref s_output) in training_data.iter() {
                 let pred = try!(self.net.predict(s_input));
                 djdws = try!(self.cost.cost_prime(self.net, &s_input, &s_output, &pred));
+                // println!("PRED: {:?}\nDJDWS: {:?}", pred, djdws);
                 // println!("Optimizing... {}", self.epochs);
                 let mut net_weights = self.net.get_weights().to_vec();
                 let mut djdws_iter = djdws.iter();
+                let i_f = i as f64;
+                let lr = self.learn_rate / ( ( i_f / self.epochs as f64 ) * i_f + 1.);
                 for weight in net_weights.iter_mut() {
                     // gradient descent
                     // W(i) = W(i) - alhpa * DJDW
                     let djdw = match djdws_iter.next() {
-                        Some(v) => v.scale(self.learn_rate),
+                        Some(v) => v.scale(lr),
                         None => return Err(NNetError::OptimizeError)
                     };
                     let tmp_weight = match (*weight).clone() - djdw {
@@ -62,12 +65,12 @@ impl<'a, NN: 'a + NeuralNet, C: 'a + CostFunction> Trainer for MiniBatchSGD<'a, 
                 let _ = self.net.set_weights(net_weights.clone());
             }
 
-            if i % 500 == 0 {
+            if i >= 0 {
                 let pred = self.net.predict(&input).unwrap();
                 // let djdws = try!(self.cost.cost_prime(self.net, &s_input, &s_output, &pred));
-                println!("{}", self.cost.cost(self.net, actual, &pred).unwrap());
-                // println!("ADDED GRADIENTS: {:?}", try!(self.cost.cost_prime(self.net, &s_input, &s_output, &pred)));
                 // println!("EPOCH {}", i);
+                println!("{}.\t{}", i, self.cost.cost(self.net, actual, &pred).unwrap());
+                // println!("ADDED GRADIENTS: {:?}", try!(self.cost.cost_prime(self.net, &s_input, &s_output, &pred)));
             }
 
 

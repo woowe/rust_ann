@@ -6,4 +6,5 @@ authors = ["Jason Cardinal <jcardinal@dealersocket.com>"]
 [dependencies]
 rand = "0.3.14"
 matrixmultiply = "0.1.9"
+rayon = "0.4.2"
 num_rust = {git = "https://github.com/woowe/num_rust.git"}

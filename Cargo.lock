@@ -5,6 +5,7 @@ dependencies = [
  "matrixmultiply 0.1.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_rust 0.1.0 (git+https://github.com/woowe/num_rust.git)",
  "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rayon 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -36,7 +37,7 @@ dependencies = [
 [[package]]
 name = "num_rust"
 version = "0.1.0"
-source = "git+https://github.com/woowe/num_rust.git#7637d050918100ac4903fcce68f65f210a2723d7"
+source = "git+https://github.com/woowe/num_rust.git#ad88ba18a5880cbcddd17ec79e4610571b401cea"
 dependencies = [
  "matrixmultiply 0.1.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
